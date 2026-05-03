@@ -1,0 +1,3715 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suivi de Performance — Aéroport</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.4.4/build/index.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --text: #111827;
+    --text-muted: #6b7280;
+    --primary: #1e40af;
+    --primary-hover: #1e3a8a;
+    --primary-light: #dbeafe;
+    --excellent: #166534;
+    --good: #16a34a;
+    --acceptable: #d97706;
+    --warning: #dc2626;
+    --excellent-bg: #dcfce7;
+    --good-bg: #d1fae5;
+    --acceptable-bg: #fef3c7;
+    --warning-bg: #fee2e2;
+    --shadow: 0 1px 3px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.06), 0 2px 4px -2px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  header.app-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  .app-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .app-title::before {
+    content: "";
+    display: inline-block;
+    width: 7px; height: 22px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .app-actions { display: flex; gap: 6px; align-items: center; }
+  nav.tabs {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    gap: 2px;
+    overflow-x: auto;
+    position: sticky;
+    top: 56px;
+    z-index: 99;
+  }
+  .tab {
+    padding: 11px 16px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); background: var(--bg); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  main.app-main { padding: 20px 24px; max-width: 1700px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow);
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .card-title { font-size: 15px; font-weight: 600; margin: 0; }
+  .card-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  /* Buttons */
+  .btn {
+    padding: 7px 13px;
+    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: var(--bg); border-color: var(--text-muted); }
+  .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  .btn-danger { background: var(--warning); color: #fff; border-color: var(--warning); }
+  .btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+  .btn-success { background: var(--good); color: #fff; border-color: var(--good); }
+  .btn-success:hover { background: #15803d; border-color: #15803d; }
+  .btn-sm { padding: 4px 9px; font-size: 11px; }
+  /* Forms */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+  }
+  .form-row { display: flex; flex-direction: column; gap: 4px; }
+  .form-row label { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+  .form-row label .req { color: var(--warning); }
+  .form-row input, .form-row select, .form-row textarea {
+    padding: 7px 9px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(30,64,175,0.1);
+  }
+  .form-actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+  .form-error { color: var(--warning); font-size: 12px; }
+  .form-success { color: var(--good); font-size: 12px; }
+  /* Tables */
+  .table-wrap { overflow-x: auto; max-width: 100%; }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.data-table th {
+    text-align: left;
+    padding: 9px 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  table.data-table th:hover { background: var(--primary-light); color: var(--primary); }
+  table.data-table th.sorted::after { content: " ▲"; font-size: 9px; }
+  table.data-table th.sorted-desc::after { content: " ▼"; font-size: 9px; }
+  table.data-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  table.data-table tbody tr:hover { background: var(--bg); }
+  table.data-table .row-actions { display: flex; gap: 4px; }
+  /* Suivi-specific table */
+  table.suivi-table { font-size: 11px; }
+  table.suivi-table td { padding: 6px 8px; }
+  table.suivi-table th { padding: 7px 8px; font-size: 10px; }
+  /* Search and pagination */
+  .table-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .search-input { padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 6px; min-width: 220px; font-size: 12px; }
+  .pagination { display: flex; gap: 4px; align-items: center; margin-top: 10px; justify-content: center; }
+  .pagination .btn { padding: 4px 9px; font-size: 11px; }
+  .pagination .btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+  .badge-excellent { background: var(--excellent-bg); color: var(--excellent); }
+  .badge-good { background: var(--good-bg); color: var(--good); }
+  .badge-acceptable { background: var(--acceptable-bg); color: #92400e; }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); }
+  .badge-neutral { background: #e5e7eb; color: #374151; }
+  .badge-blue { background: var(--primary-light); color: var(--primary); }
+  /* Filters bar */
+  .filters-bar {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    background: var(--surface);
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    box-shadow: var(--shadow);
+  }
+  .filters-bar .form-row { flex: 0 0 auto; min-width: 130px; }
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; box-shadow: var(--shadow); border-left: 4px solid var(--primary); }
+  .kpi-card .kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .kpi-card .kpi-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .kpi-card .kpi-detail { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .kpi-card.excellent { border-left-color: var(--excellent); }
+  .kpi-card.good { border-left-color: var(--good); }
+  .kpi-card.acceptable { border-left-color: var(--acceptable); }
+  .kpi-card.warning { border-left-color: var(--warning); }
+  /* Toast */
+  .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 18px; border-radius: 8px; background: var(--text); color: #fff; font-size: 13px; box-shadow: var(--shadow-md); z-index: 300; opacity: 0; transform: translateY(10px); transition: all 0.2s; pointer-events: none; max-width: 400px; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { background: var(--good); }
+  .toast.error { background: var(--warning); }
+  .toast.info { background: var(--primary); }
+  /* Modal */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(17,24,39,0.5); z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop.active { display: flex; }
+  .modal { background: var(--surface); border-radius: 10px; max-width: 700px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.15); }
+  .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: var(--surface); }
+  .modal-title { font-size: 16px; font-weight: 700; margin: 0; }
+  .modal-close { background: transparent; border: none; cursor: pointer; font-size: 22px; color: var(--text-muted); padding: 0 6px; }
+  .modal-body { padding: 18px 20px; }
+  /* Banner */
+  .banner { background: var(--primary-light); border: 1px solid #93c5fd; color: var(--primary-hover); padding: 11px 14px; border-radius: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .banner.warning-banner { background: var(--warning-bg); border-color: #fca5a5; color: var(--warning); }
+  /* Section heading */
+  .section-heading { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 16px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--border); }
+  /* Sub-tabs */
+  .subtabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .subtab { padding: 8px 14px; border: none; background: transparent; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; }
+  .subtab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  /* Helpers */
+  .text-muted { color: var(--text-muted); }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-style: italic; }
+  .clickable-row { cursor: pointer; }
+  .row-attention { background: #fef3c7 !important; }
+  .row-warning { background: #fee2e2 !important; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  /* Import zone */
+  .import-zone { background: var(--bg); border: 2px dashed var(--border-strong); border-radius: 8px; padding: 18px; display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .import-zone .info { flex: 1; min-width: 200px; }
+  .import-zone .info h4 { margin: 0 0 4px; font-size: 13px; }
+  .import-zone .info p { margin: 0; font-size: 11px; color: var(--text-muted); }
+  .import-zone .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .import-stats { display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap; font-size: 12px; }
+  .import-stats .stat { background: var(--bg); padding: 6px 10px; border-radius: 4px; border-left: 3px solid var(--primary); }
+  .import-stats .stat .lbl { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+  .import-stats .stat .val { font-weight: 700; font-size: 14px; }
+  /* Suivi totals row */
+  tr.totals-row td { background: var(--primary-light); font-weight: 700; border-top: 2px solid var(--primary); }
+  /* Status badges for suivi */
+  .status-ok { color: var(--good); font-weight: 600; }
+  .status-late { color: var(--acceptable); font-weight: 600; }
+  .status-early { color: var(--acceptable); font-weight: 600; }
+  .status-incorrect { color: var(--warning); font-weight: 700; }
+  .status-absent { color: var(--warning); font-weight: 700; }
+  /* Chart container */
+  .chart-container { position: relative; width: 100%; }
+  /* Section "Heures payées en trop" */
+  .overpaid-section { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(245,158,11,0.12); }
+  .overpaid-section.overpaid-d { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-color: #1e40af; box-shadow: 0 4px 12px rgba(30,64,175,0.12); }
+  .overpaid-section.overpaid-a { background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%); border-color: #ea580c; box-shadow: 0 4px 12px rgba(234,88,12,0.12); }
+  .overpaid-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .overpaid-title { margin: 0; font-size: 15px; font-weight: 700; color: #92400e; letter-spacing: 0.02em; }
+  .overpaid-d .overpaid-title { color: #1e3a8a; }
+  .overpaid-a .overpaid-title { color: #9a3412; }
+  .overpaid-subtitle { font-size: 11px; color: rgba(0,0,0,0.55); margin-top: 3px; }
+  .overpaid-filter { min-width: 240px; display: flex; flex-direction: column; gap: 4px; }
+  .overpaid-filter label { font-size: 10px; font-weight: 600; text-transform: uppercase; color: rgba(0,0,0,0.55); letter-spacing: 0.04em; }
+  .overpaid-body { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .overpaid-value { font-size: 42px; font-weight: 700; font-variant-numeric: tabular-nums; color: #92400e; line-height: 1; padding: 6px 14px; background: rgba(255,255,255,0.5); border-radius: 8px; }
+  .overpaid-d .overpaid-value { color: #1e3a8a; }
+  .overpaid-a .overpaid-value { color: #9a3412; }
+  .overpaid-breakdown { flex: 1; min-width: 200px; font-size: 12px; }
+  .overpaid-breakdown .ob-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(0,0,0,0.15); }
+  .overpaid-breakdown .ob-row:last-child { border-bottom: none; }
+  .overpaid-breakdown .ob-name { font-weight: 600; }
+  .overpaid-breakdown .ob-time { font-variant-numeric: tabular-nums; }
+  /* Vols/heure month select */
+  .vph-month-select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); font-size: 12px; cursor: pointer; }
+  .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .chart-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  @media (max-width: 1100px) { .chart-grid-2, .chart-grid-3 { grid-template-columns: 1fr; } }
+  /* Dashboard sub-section buttons */
+  .dash-section-buttons { display: flex; gap: 6px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; box-shadow: var(--shadow); width: fit-content; }
+  .ds-btn { padding: 8px 22px; border: none; background: transparent; border-radius: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-muted); cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; }
+  .ds-icon { width: 18px; height: 18px; display: inline-block; }
+  .ds-btn:hover { background: var(--bg); color: var(--text); }
+  .ds-btn.active { background: linear-gradient(135deg, #1e40af 0%, #06b6d4 100%); color: #fff; box-shadow: 0 2px 6px rgba(30,64,175,0.3); }
+  .ds-btn[data-ds="d"].active { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
+  .ds-btn[data-ds="a"].active { background: linear-gradient(135deg, #ea580c 0%, #f97316 100%); box-shadow: 0 2px 6px rgba(234,88,12,0.3); }
+  /* Employee cards (dashboard sections) */
+  .emp-card-grid { display: grid; gap: 8px; }
+  .emp-card { display: grid; grid-template-columns: 220px repeat(7, 1fr) auto; gap: 10px; align-items: center; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; transition: all 0.15s; }
+  .emp-card:hover { border-color: var(--primary); }
+  .emp-card.has-alert { border-left: 3px solid var(--warning); }
+  .emp-card .ec-name { font-weight: 600; font-size: 13px; }
+  .emp-card .ec-id { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+  .emp-card .ec-metric { text-align: center; }
+  .emp-card .ec-label { font-size: 9px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.05em; }
+  .emp-card .ec-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .emp-card .ec-value.positive { color: var(--good); }
+  .emp-card .ec-value.warn { color: var(--acceptable); }
+  .emp-card .ec-value.bad { color: var(--warning); }
+  .emp-card .ec-badges { display: flex; flex-direction: column; gap: 3px; min-width: 130px; }
+  .emp-card .ec-badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600; text-align: center; }
+  .ec-badge.bg-ok { background: var(--good-bg); color: var(--good); }
+  .ec-badge.bg-warn { background: var(--acceptable-bg); color: #92400e; }
+  .ec-badge.bg-alert { background: var(--warning-bg); color: var(--warning); }
+  @media (max-width: 1300px) { .emp-card { grid-template-columns: 180px repeat(7, 1fr); } .emp-card .ec-badges { grid-column: 1 / -1; flex-direction: row; } }
+  /* Dashboard sections */
+  .dash-section { margin-bottom: 28px; }
+  .dash-section-header { margin-bottom: 12px; padding: 8px 14px; border-radius: 8px; border-left: 5px solid; }
+  .dash-section-header h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.05em; }
+  .section-global .dash-section-header { background: linear-gradient(90deg, #ede9fe 0%, transparent 100%); border-left-color: #7c3aed; }
+  .section-d .dash-section-header { background: linear-gradient(90deg, #dbeafe 0%, transparent 100%); border-left-color: #1e40af; }
+  .section-a .dash-section-header { background: linear-gradient(90deg, #fed7aa 0%, transparent 100%); border-left-color: #ea580c; }
+  .kpi-card.kpi-highlight { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); color: #fff; border: none; }
+  .kpi-card.kpi-highlight .kpi-label { color: rgba(255,255,255,0.85); }
+  .kpi-card.kpi-highlight .kpi-detail { color: rgba(255,255,255,0.75); }
+  .kpi-card.kpi-violet { border-left-color: #7c3aed; }
+  .kpi-card.kpi-orange { border-left-color: #ea580c; }
+  /* Multi-select dropdown */
+  .multi-select { position: relative; min-width: 220px; }
+  .multi-select-toggle { padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 32px; }
+  .multi-select-toggle:hover { border-color: var(--text-muted); }
+  .multi-select-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; margin-top: 4px; max-height: 280px; overflow-y: auto; z-index: 50; display: none; box-shadow: var(--shadow-md); }
+  .multi-select-dropdown.open { display: block; }
+  .multi-select-dropdown .ms-actions { padding: 6px 8px; border-bottom: 1px solid var(--border); display: flex; gap: 6px; }
+  .multi-select-dropdown .ms-actions .btn { font-size: 11px; padding: 3px 8px; }
+  .multi-select-dropdown label { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  .multi-select-dropdown label:hover { background: var(--bg); }
+  .multi-select-dropdown label input { margin: 0; }
+  .multi-select-dropdown .ms-section-label { padding: 4px 10px; font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; background: var(--bg); border-top: 1px solid var(--border); }
+  /* Imports panel */
+  .imports-panel { margin-top: 12px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+  .imports-panel-title { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--text-muted); letter-spacing: 0.04em; margin: 0 0 8px; }
+  .import-row { display: flex; gap: 10px; align-items: center; padding: 6px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+  .import-row .file-icon { width: 20px; text-align: center; color: var(--primary); font-weight: 700; }
+  .import-row .file-info { flex: 1; min-width: 0; }
+  .import-row .file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .import-row .file-meta { font-size: 11px; color: var(--text-muted); }
+  .import-row .file-actions { display: flex; gap: 6px; }
+  .import-row.removed { opacity: 0.4; }
+  @media (max-width: 1100px) {
+    .form-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1 class="app-title">Suivi de Performance — Aéroport</h1>
+  <div class="app-actions">
+    <button class="btn btn-sm" id="btnExportJson" title="Sauvegarde complète JSON">Exporter JSON</button>
+    <button class="btn btn-sm" id="btnImportJson" title="Restaurer depuis JSON">Importer JSON</button>
+    <input type="file" id="fileImportJson" accept="application/json" style="display:none">
+    <button class="btn btn-sm btn-danger" id="btnReset" title="Tout effacer">Réinitialiser</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-panel="dashboard">Dashboard</button>
+  <button class="tab" data-panel="evolution">Évolution mensuelle</button>
+  <button class="tab" data-panel="suivi-d">Suivi Départs</button>
+  <button class="tab" data-panel="suivi-a">Suivi Arrivées</button>
+  <button class="tab" data-panel="schedule">Horaires</button>
+  <button class="tab" data-panel="timesheet">Feuille de temps</button>
+  <button class="tab" data-panel="surveys">Sondages</button>
+  <button class="tab" data-panel="config">Configuration</button>
+</nav>
+
+<main class="app-main">
+
+<!-- ====================== DASHBOARD ====================== -->
+<section class="panel active" id="panel-dashboard">
+  <div class="filters-bar">
+    <div class="form-row">
+      <label>Période</label>
+      <select id="dash-period">
+        <option value="week" selected>Cette semaine</option>
+        <option value="month">Ce mois</option>
+        <option value="quarter">Ce trimestre</option>
+        <option value="all">Tout l'historique</option>
+        <option value="custom">Personnalisée</option>
+      </select>
+    </div>
+    <div class="form-row" id="dash-from-wrap" style="display:none">
+      <label>Du</label><input type="date" id="dash-from">
+    </div>
+    <div class="form-row" id="dash-to-wrap" style="display:none">
+      <label>Au</label><input type="date" id="dash-to">
+    </div>
+    <div class="form-row">
+      <label>Agents</label>
+      <div class="multi-select" id="dash-agents-multi"></div>
+    </div>
+    <div style="margin-left:auto" class="form-row">
+      <label>&nbsp;</label>
+      <span id="dash-period-label" class="text-muted" style="font-size:12px;font-weight:600;padding-bottom:7px"></span>
+    </div>
+  </div>
+
+  <!-- BOUTONS SOUS-SECTIONS -->
+  <div class="dash-section-buttons">
+    <button class="ds-btn active" data-ds="global">
+      <svg class="ds-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+      GLOBAL
+    </button>
+    <button class="ds-btn" data-ds="d">
+      <svg class="ds-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M2.5 19h19v2h-19zM22.07 9.64c-.21-.8-1.04-1.28-1.84-1.06L14.92 10 8.46 3.98 6.53 4.49l3.87 6.7-4.97 1.33-1.97-1.54-1.45.39 2.59 4.49 19.69-5.21c.81-.23 1.28-1.05 1.07-1.85z"/></svg>
+      DÉPARTS
+    </button>
+    <button class="ds-btn" data-ds="a">
+      <svg class="ds-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M2.5 19h19v2h-19zM9.68 13.27l4.96 1.33 6.6 1.77c.56.15 1.13-.18 1.28-.74.15-.56-.18-1.13-.74-1.28L18.66 13l-2.93-9.41-1.74-.46v6.18l-3.31-.88-.97-3.41-1.31-.35v3.41l-3.41-.92-.55 2.04 5.24 4.07z"/></svg>
+      ARRIVÉES
+    </button>
+  </div>
+
+  <!-- VUE GLOBAL -->
+  <div class="dash-view" id="dash-view-global">
+    <div class="kpi-grid" id="kpis-global"></div>
+
+    <!-- Heures payées en trop — Global -->
+    <div class="overpaid-section">
+      <div class="overpaid-header">
+        <div>
+          <h3 class="overpaid-title">Heures payées en trop — Global</h3>
+          <div class="overpaid-subtitle">Somme des minutes de quart début incorrect + fin incorrect (Départs + Arrivées)</div>
+        </div>
+        <div class="overpaid-filter">
+          <label>Filtrer par employé(s)</label>
+          <div class="multi-select" id="overpaid-global-multi"></div>
+        </div>
+      </div>
+      <div class="overpaid-body">
+        <div class="overpaid-value" id="overpaid-global-value">00:00:00</div>
+        <div class="overpaid-breakdown" id="overpaid-global-breakdown"></div>
+      </div>
+    </div>
+
+    <div class="chart-grid-2">
+      <div class="card"><div class="card-header"><h3 class="card-title">Vols par agent — Global</h3></div><div class="chart-container" style="height:280px"><canvas id="dash-bar-global-vols"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3 class="card-title">Heures travaillées par agent</h3></div><div class="chart-container" style="height:280px"><canvas id="dash-bar-global-hours"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">Tableau combiné par agent</h3></div>
+      <div class="table-wrap">
+        <table class="data-table" id="dash-global-table">
+          <thead><tr>
+            <th data-sort="name">Agent</th>
+            <th data-sort="agentId">AGENTID</th>
+            <th data-sort="section">Section</th>
+            <th data-sort="totalSurveys">Vols</th>
+            <th data-sort="hoursWorked">H. travaillées</th>
+            <th data-sort="incorrectStart">Début incor.</th>
+            <th data-sort="incorrectEnd">Fin incor.</th>
+            <th data-sort="absences">Absences</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- VUE DÉPARTS -->
+  <div class="dash-view" id="dash-view-d" style="display:none">
+    <div class="kpi-grid" id="kpis-d"></div>
+    <div class="overpaid-section overpaid-d">
+      <div class="overpaid-header">
+        <div>
+          <h3 class="overpaid-title">Heures payées en trop — Départs</h3>
+          <div class="overpaid-subtitle">Somme des minutes de quart début incorrect + fin incorrect</div>
+        </div>
+        <div class="overpaid-filter">
+          <label>Filtrer par employé(s)</label>
+          <div class="multi-select" id="overpaid-d-multi"></div>
+        </div>
+      </div>
+      <div class="overpaid-body">
+        <div class="overpaid-value" id="overpaid-d-value">00:00:00</div>
+        <div class="overpaid-breakdown" id="overpaid-d-breakdown"></div>
+      </div>
+    </div>
+    <div class="chart-grid-3">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Vols/heure — objectif <span id="dash-d-target-lbl">5.0</span></h3>
+          <select class="vph-month-select" id="vph-month-d"><option value="all">Tous les mois</option></select>
+        </div>
+        <div class="chart-container" style="height:280px"><canvas id="dash-bar-d-vph"></canvas></div>
+      </div>
+      <div class="card"><div class="card-header"><h3 class="card-title">Quarts début incorrect</h3></div><div class="chart-container" style="height:280px"><canvas id="dash-bar-d-late"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3 class="card-title">Quarts fin incorrect</h3></div><div class="chart-container" style="height:280px"><canvas id="dash-bar-d-early"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">Carte par employé — Départs</h3></div>
+      <div id="dash-cards-d"></div>
+    </div>
+  </div>
+
+  <!-- VUE ARRIVÉES -->
+  <div class="dash-view" id="dash-view-a" style="display:none">
+    <div class="kpi-grid" id="kpis-a"></div>
+    <div class="overpaid-section overpaid-a">
+      <div class="overpaid-header">
+        <div>
+          <h3 class="overpaid-title">Heures payées en trop — Arrivées</h3>
+          <div class="overpaid-subtitle">Somme des minutes de quart début incorrect + fin incorrect</div>
+        </div>
+        <div class="overpaid-filter">
+          <label>Filtrer par employé(s)</label>
+          <div class="multi-select" id="overpaid-a-multi"></div>
+        </div>
+      </div>
+      <div class="overpaid-body">
+        <div class="overpaid-value" id="overpaid-a-value">00:00:00</div>
+        <div class="overpaid-breakdown" id="overpaid-a-breakdown"></div>
+      </div>
+    </div>
+    <div class="chart-grid-3">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Vols/heure — objectif <span id="dash-a-target-lbl">2.0</span></h3>
+          <select class="vph-month-select" id="vph-month-a"><option value="all">Tous les mois</option></select>
+        </div>
+        <div class="chart-container" style="height:280px"><canvas id="dash-bar-a-vph"></canvas></div>
+      </div>
+      <div class="card"><div class="card-header"><h3 class="card-title">Quarts début incorrect</h3></div><div class="chart-container" style="height:280px"><canvas id="dash-bar-a-late"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3 class="card-title">Quarts fin incorrect</h3></div><div class="chart-container" style="height:280px"><canvas id="dash-bar-a-early"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">Carte par employé — Arrivées</h3></div>
+      <div id="dash-cards-a"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== ÉVOLUTION MENSUELLE ====================== -->
+<section class="panel" id="panel-evolution">
+  <div class="filters-bar">
+    <div class="form-row">
+      <label>Plage</label>
+      <select id="evol-period">
+        <option value="all" selected>Tout l'historique</option>
+        <option value="quarter">Ce trimestre</option>
+        <option value="year">Cette année</option>
+        <option value="custom">Personnalisée</option>
+      </select>
+    </div>
+    <div class="form-row" id="evol-from-wrap" style="display:none">
+      <label>Du</label><input type="date" id="evol-from">
+    </div>
+    <div class="form-row" id="evol-to-wrap" style="display:none">
+      <label>Au</label><input type="date" id="evol-to">
+    </div>
+    <div style="margin-left:auto" class="form-row">
+      <label>&nbsp;</label>
+      <span id="evol-period-label" class="text-muted" style="font-size:12px;font-weight:600;padding-bottom:7px"></span>
+    </div>
+  </div>
+
+  <div class="dash-section section-d">
+    <div class="dash-section-header"><h2>BOX PLOT PRODUCTIVITÉ — DÉPARTS <span class="text-muted" style="font-weight:400;font-size:12px">— Vols/h, objectif <span id="evol-target-d-lbl">5.0</span></span></h2></div>
+    <div class="card"><div class="chart-container" style="height:340px"><canvas id="evol-box-d"></canvas></div></div>
+  </div>
+
+  <div class="dash-section section-a">
+    <div class="dash-section-header"><h2>BOX PLOT PRODUCTIVITÉ — ARRIVÉES <span class="text-muted" style="font-weight:400;font-size:12px">— Vols/h, objectif <span id="evol-target-a-lbl">2.0</span></span></h2></div>
+    <div class="card"><div class="chart-container" style="height:340px"><canvas id="evol-box-a"></canvas></div></div>
+  </div>
+
+  <div class="dash-section section-d">
+    <div class="dash-section-header"><h2>QUARTS HEURE DÉBUT INCORRECTE PAR MOIS — DÉPARTS</h2></div>
+    <div class="card"><div class="chart-container" style="height:280px"><canvas id="evol-bar-late-d"></canvas></div></div>
+  </div>
+
+  <div class="dash-section section-a">
+    <div class="dash-section-header"><h2>QUARTS HEURE DÉBUT INCORRECTE PAR MOIS — ARRIVÉES</h2></div>
+    <div class="card"><div class="chart-container" style="height:280px"><canvas id="evol-bar-late-a"></canvas></div></div>
+  </div>
+
+  <div class="dash-section section-d">
+    <div class="dash-section-header"><h2>QUARTS HEURE FIN INCORRECTE PAR MOIS — DÉPARTS</h2></div>
+    <div class="card"><div class="chart-container" style="height:280px"><canvas id="evol-bar-early-d"></canvas></div></div>
+  </div>
+
+  <div class="dash-section section-a">
+    <div class="dash-section-header"><h2>QUARTS HEURE FIN INCORRECTE PAR MOIS — ARRIVÉES</h2></div>
+    <div class="card"><div class="chart-container" style="height:280px"><canvas id="evol-bar-early-a"></canvas></div></div>
+  </div>
+
+  <div class="dash-section section-global">
+    <div class="dash-section-header"><h2>ABSENCES PAR MOIS</h2></div>
+    <div class="card"><div class="chart-container" style="height:260px"><canvas id="evol-bar-abs"></canvas></div></div>
+  </div>
+</section>
+
+<!-- ====================== SUIVI DÉPARTS ====================== -->
+<section class="panel" id="panel-suivi-d">
+  <div class="filters-bar">
+    <div class="form-row">
+      <label>Période</label>
+      <select id="sd-period">
+        <option value="week">Cette semaine</option>
+        <option value="month">Ce mois</option>
+        <option value="all" selected>Tout</option>
+        <option value="custom">Personnalisée</option>
+      </select>
+    </div>
+    <div class="form-row" id="sd-from-wrap" style="display:none"><label>Du</label><input type="date" id="sd-from"></div>
+    <div class="form-row" id="sd-to-wrap" style="display:none"><label>Au</label><input type="date" id="sd-to"></div>
+    <div class="form-row">
+      <label>Agent</label>
+      <select id="sd-agent"><option value="all">Tous</option></select>
+    </div>
+    <div class="form-row" style="margin-left:auto">
+      <label>&nbsp;</label>
+      <button class="btn btn-sm" id="sd-export">Exporter CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Suivi Départs (Projet 1)</h2>
+        <div class="card-subtitle">Seuils : retard incorrect &gt; 1h10 · fin hâtive incorrecte &gt; 45 min</div>
+      </div>
+      <div id="sd-stats-summary" class="text-muted" style="font-size:12px"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table suivi-table" id="sd-table">
+        <thead><tr>
+          <th data-sort="date">Date</th>
+          <th data-sort="agentId">AGENTID</th>
+          <th data-sort="employee">Employé</th>
+          <th data-sort="schedStart">H. Début Horaire</th>
+          <th data-sort="schedEnd">H. Fin Horaire</th>
+          <th data-sort="tsStart">Début F. de temps</th>
+          <th data-sort="tsEnd">Fin F. de temps</th>
+          <th data-sort="firstSurvey">1er sondage</th>
+          <th data-sort="lastSurvey">Dernier sondage</th>
+          <th data-sort="schedHours">H. prévues</th>
+          <th data-sort="actualHours">H. réelles</th>
+          <th data-sort="diffHours">Diff prév/réel</th>
+          <th data-sort="lateMin">Retard début</th>
+          <th data-sort="earlyEndMin">Fin hâtive</th>
+          <th data-sort="incorrectStart">Début incor.</th>
+          <th data-sort="incorrectEnd">Fin incor.</th>
+          <th data-sort="surveys">Nb vols</th>
+          <th data-sort="surveysPerHour">Vols/h</th>
+          <th data-sort="absence">Absence</th>
+          <th>Action</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== SUIVI ARRIVÉES ====================== -->
+<section class="panel" id="panel-suivi-a">
+  <div class="filters-bar">
+    <div class="form-row">
+      <label>Période</label>
+      <select id="sa-period">
+        <option value="week">Cette semaine</option>
+        <option value="month">Ce mois</option>
+        <option value="all" selected>Tout</option>
+        <option value="custom">Personnalisée</option>
+      </select>
+    </div>
+    <div class="form-row" id="sa-from-wrap" style="display:none"><label>Du</label><input type="date" id="sa-from"></div>
+    <div class="form-row" id="sa-to-wrap" style="display:none"><label>Au</label><input type="date" id="sa-to"></div>
+    <div class="form-row">
+      <label>Agent</label>
+      <select id="sa-agent"><option value="all">Tous</option></select>
+    </div>
+    <div class="form-row" style="margin-left:auto">
+      <label>&nbsp;</label>
+      <button class="btn btn-sm" id="sa-export">Exporter CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Suivi Arrivées (Projet 2)</h2>
+        <div class="card-subtitle">Seuils : retard incorrect &gt; 1h00 · fin hâtive incorrecte &gt; 20 min</div>
+      </div>
+      <div id="sa-stats-summary" class="text-muted" style="font-size:12px"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table suivi-table" id="sa-table">
+        <thead><tr>
+          <th data-sort="date">Date</th>
+          <th data-sort="agentId">AGENTID</th>
+          <th data-sort="employee">Employé</th>
+          <th data-sort="schedStart">H. Début Horaire</th>
+          <th data-sort="schedEnd">H. Fin Horaire</th>
+          <th data-sort="tsStart">Début F. de temps</th>
+          <th data-sort="tsEnd">Fin F. de temps</th>
+          <th data-sort="firstSurvey">1er sondage</th>
+          <th data-sort="lastSurvey">Dernier sondage</th>
+          <th data-sort="schedHours">H. prévues</th>
+          <th data-sort="actualHours">H. réelles</th>
+          <th data-sort="diffHours">Diff prév/réel</th>
+          <th data-sort="lateMin">Retard début</th>
+          <th data-sort="earlyEndMin">Fin hâtive</th>
+          <th data-sort="incorrectStart">Début incor.</th>
+          <th data-sort="incorrectEnd">Fin incor.</th>
+          <th data-sort="surveys">Nb vols</th>
+          <th data-sort="surveysPerHour">Vols/h</th>
+          <th data-sort="absence">Absence</th>
+          <th>Action</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== HORAIRES ====================== -->
+<section class="panel" id="panel-schedule">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Ajout manuel d'un horaire</h2>
+      <span class="text-muted" style="font-size:11px">Pour ajouter une journée de travail non planifiée à l'origine.</span>
+    </div>
+    <form id="form-schedule">
+      <div class="form-grid">
+        <div class="form-row"><label>Date <span class="req">*</span></label><input type="date" id="sc-date" required></div>
+        <div class="form-row">
+          <label>Employé <span class="req">*</span></label>
+          <select id="sc-employee" required></select>
+        </div>
+        <div class="form-row">
+          <label>Projet <span class="req">*</span></label>
+          <select id="sc-projet" required>
+            <option value="1">Départs</option>
+            <option value="2">Arrivées</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Heure début <span class="req">*</span></label><input type="time" id="sc-start" required></div>
+        <div class="form-row"><label>Heure fin <span class="req">*</span></label><input type="time" id="sc-end" required></div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <button type="button" class="btn" id="sc-cancel" style="display:none">Annuler</button>
+        <input type="hidden" id="sc-edit-id">
+        <span id="sc-feedback"></span>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Import — Horaire planifié</h2>
+    </div>
+    <div class="import-zone">
+      <div class="info">
+        <h4>Format attendu (Excel ou CSV)</h4>
+        <p>Colonnes : <code>Date | Employé | Projet | Heure_Début | Heure_Fin</code> · Date au format YYYY-MM-DD · Projet : 1 = Départs, 2 = Arrivées · Heures au format HH:MM ou HH:MM:SS</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-success" id="btnImportSchedule">Importer fichier</button>
+        <input type="file" id="fileSchedule" accept=".xlsx,.xls,.csv" style="display:none">
+        <button class="btn btn-danger" id="btnClearSchedule">Supprimer toutes les données</button>
+      </div>
+    </div>
+    <div class="import-stats" id="schedule-stats"></div>
+    <div class="imports-panel" id="schedule-imports-panel"></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Horaires enregistrés</h2>
+      <button class="btn btn-sm" id="btnExportSchedule">Exporter CSV</button>
+    </div>
+    <div class="table-controls">
+      <input type="text" class="search-input" id="sc-search" placeholder="Rechercher par employé ou AGENTID...">
+      <select id="sc-projet-filter">
+        <option value="all">Tous projets</option>
+        <option value="1">Départs (1)</option>
+        <option value="2">Arrivées (2)</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="sc-table">
+        <thead><tr>
+          <th data-sort="date">Date</th>
+          <th data-sort="employee">Employé</th>
+          <th data-sort="agentId">AGENTID</th>
+          <th data-sort="projet">Projet</th>
+          <th data-sort="startTime">H. Début</th>
+          <th data-sort="endTime">H. Fin</th>
+          <th data-sort="hours">H. prévues</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="sc-pagination"></div>
+  </div>
+</section>
+
+<!-- ====================== MODAL ÉDITION SUIVI ====================== -->
+<div class="modal-backdrop" id="suivi-edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Modifier la ligne du Suivi</h2>
+      <button class="modal-close" id="suivi-edit-close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted" style="font-size:12px">Modifie ou crée l'entrée d'horaire correspondante. Si l'employé n'avait pas d'horaire prévu cette journée, le formulaire en crée une.</p>
+      <form id="form-suivi-edit">
+        <div class="form-grid">
+          <div class="form-row"><label>Date <span class="req">*</span></label><input type="date" id="se-date" required></div>
+          <div class="form-row">
+            <label>Employé <span class="req">*</span></label>
+            <select id="se-employee" required></select>
+          </div>
+          <div class="form-row"><label>AGENTID</label><input type="text" id="se-agentid" readonly style="background:#f3f4f6"></div>
+          <div class="form-row"><label>Heure début horaire</label><input type="time" id="se-start"></div>
+          <div class="form-row"><label>Heure fin horaire</label><input type="time" id="se-end"></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+          <button type="button" class="btn" id="se-cancel">Annuler</button>
+          <input type="hidden" id="se-section">
+          <input type="hidden" id="se-orig-date">
+          <input type="hidden" id="se-orig-agentid">
+          <span id="se-feedback"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== FEUILLE DE TEMPS ====================== -->
+<section class="panel" id="panel-timesheet">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Import — Feuille de temps</h2>
+    </div>
+    <div class="import-zone">
+      <div class="info">
+        <h4>Format attendu (Excel)</h4>
+        <p>Colonnes : <code>_telkey | _h1 | NOM | MIFI | AJOUR | HEURES | MINUTES | HEURES_FIN | MINUTES_FIN | PROJET | ATEMPS | …</code><br>
+        AJOUR au format YYYYMMDD · HEURES en valeur numérique (« 18 PM » = 18:00) · PROJET « ADM ASQ-ACI Départs » → projet 1, « Arrivées » → projet 2</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-success" id="btnImportTimesheet">Importer fichier</button>
+        <input type="file" id="fileTimesheet" accept=".xlsx,.xls,.csv" style="display:none">
+        <button class="btn btn-danger" id="btnClearTimesheet">Supprimer toutes les données</button>
+      </div>
+    </div>
+    <div class="import-stats" id="timesheet-stats"></div>
+    <div class="imports-panel" id="timesheet-imports-panel"></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Feuilles de temps enregistrées</h2>
+      <button class="btn btn-sm" id="btnExportTimesheet">Exporter CSV</button>
+    </div>
+    <div class="table-controls">
+      <input type="text" class="search-input" id="ts-search" placeholder="Rechercher par employé ou AGENTID...">
+      <select id="ts-projet-filter">
+        <option value="all">Tous projets</option>
+        <option value="1">Départs</option>
+        <option value="2">Arrivées</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="ts-table">
+        <thead><tr>
+          <th data-sort="date">Date</th>
+          <th data-sort="employee">Employé (NOM)</th>
+          <th data-sort="agentId">AGENTID</th>
+          <th data-sort="projet">Projet</th>
+          <th data-sort="startTime">H. Début</th>
+          <th data-sort="endTime">H. Fin</th>
+          <th data-sort="duration">Durée</th>
+          <th data-sort="atemps">ATEMPS</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="ts-pagination"></div>
+  </div>
+</section>
+
+<!-- ====================== SONDAGES ====================== -->
+<section class="panel" id="panel-surveys">
+  <div class="subtabs">
+    <button class="subtab active" data-subtab="surv-d">Départs (Live Data Departures)</button>
+    <button class="subtab" data-subtab="surv-a">Arrivées (Live Data Arrivals)</button>
+  </div>
+
+  <!-- Départs -->
+  <div id="subpanel-surv-d">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Import — Sondages Départs</h2>
+      </div>
+      <div class="import-zone">
+        <div class="info">
+          <h4>Format attendu (Live-Data Departures.xlsx)</h4>
+          <p>Onglet <code>Live Data</code> · Colonnes utilisées : <code>E=Agent_Date</code> (DD/MM/YYYY), <code>F=Agent_Time</code>, <code>CK=Agent_User</code>, <code>CO=Status</code> (filtre = « Completed »)</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-success" id="btnImportSurveysD">Importer fichier</button>
+          <input type="file" id="fileSurveysD" accept=".xlsx,.xls" style="display:none">
+          <button class="btn btn-danger" id="btnClearSurveysD">Supprimer toutes les données</button>
+        </div>
+      </div>
+      <div class="import-stats" id="surveys-d-stats"></div>
+      <div class="imports-panel" id="surveysD-imports-panel"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Sondages Départs enregistrés</h2>
+        <button class="btn btn-sm" id="btnExportSurveysD">Exporter CSV</button>
+      </div>
+      <div class="table-controls">
+        <input type="text" class="search-input" id="surv-d-search" placeholder="Rechercher par AGENTID ou date (YYYY-MM-DD)...">
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="surv-d-table">
+          <thead><tr>
+            <th data-sort="date">Date</th>
+            <th data-sort="time">Heure</th>
+            <th data-sort="agentId">AGENTID</th>
+            <th data-sort="status">Statut</th>
+            <th data-sort="referenceId">Reference</th>
+            <th>Actions</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="surv-d-pagination"></div>
+    </div>
+  </div>
+
+  <!-- Arrivées -->
+  <div id="subpanel-surv-a" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Import — Sondages Arrivées</h2>
+      </div>
+      <div class="import-zone">
+        <div class="info">
+          <h4>Format attendu (Live-Data Arrivals.xlsx)</h4>
+          <p>Onglet <code>Live Data</code> · Colonnes utilisées : <code>G=Date_interview</code> (MM-DD-YYYY), <code>H=Time_interview</code>, <code>B=AgentID</code>, <code>CC=SMT_status</code> (filtre = « On-target »)</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-success" id="btnImportSurveysA">Importer fichier</button>
+          <input type="file" id="fileSurveysA" accept=".xlsx,.xls" style="display:none">
+          <button class="btn btn-danger" id="btnClearSurveysA">Supprimer toutes les données</button>
+        </div>
+      </div>
+      <div class="import-stats" id="surveys-a-stats"></div>
+      <div class="imports-panel" id="surveysA-imports-panel"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Sondages Arrivées enregistrés</h2>
+        <button class="btn btn-sm" id="btnExportSurveysA">Exporter CSV</button>
+      </div>
+      <div class="table-controls">
+        <input type="text" class="search-input" id="surv-a-search" placeholder="Rechercher par AGENTID ou date...">
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="surv-a-table">
+          <thead><tr>
+            <th data-sort="date">Date</th>
+            <th data-sort="time">Heure</th>
+            <th data-sort="agentId">AGENTID</th>
+            <th data-sort="status">Statut</th>
+            <th data-sort="referenceId">Reference</th>
+            <th>Actions</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="surv-a-pagination"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== CONFIGURATION ====================== -->
+<section class="panel" id="panel-config">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Agents</h2>
+      <span class="text-muted" style="font-size:11px">Le NOM doit correspondre exactement à la colonne NOM de la feuille de temps. AGENTID doit correspondre à Agent_User / AgentID des sondages.</span>
+    </div>
+    <form id="form-employee">
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Nom complet <span class="req">*</span></label>
+          <input type="text" id="emp-name" required placeholder="Ex : Bléon Brahimi">
+        </div>
+        <div class="form-row">
+          <label>AGENTID <span class="req">*</span></label>
+          <input type="text" id="emp-agentid" required placeholder="Ex : bbrahimi">
+        </div>
+        <div class="form-row">
+          <label>Section <span class="req">*</span></label>
+          <select id="emp-section" required>
+            <option value="D">Départs</option>
+            <option value="A">Arrivées</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Statut</label>
+          <select id="emp-active">
+            <option value="true">Actif</option>
+            <option value="false">Inactif</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <button type="button" class="btn" id="emp-cancel" style="display:none">Annuler</button>
+        <button type="button" class="btn btn-sm" id="emp-fill-id" title="Calcule l'AGENTID depuis le nom">Calculer AGENTID auto</button>
+        <input type="hidden" id="emp-edit-id">
+        <span id="emp-feedback"></span>
+      </div>
+    </form>
+    <div class="table-wrap" style="margin-top:14px">
+      <table class="data-table" id="emp-table">
+        <thead><tr>
+          <th data-sort="name">Nom complet</th>
+          <th data-sort="agentId">AGENTID</th>
+          <th data-sort="section">Section</th>
+          <th data-sort="active">Statut</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">Paramètres globaux</h2></div>
+    <form id="form-settings">
+      <div class="section-heading">Seuils de quart incorrect</div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Seuil retard incorrect Départs (min)</label>
+          <input type="number" id="cfg-d-late" min="0" value="70">
+        </div>
+        <div class="form-row">
+          <label>Seuil fin hâtive incorrecte Départs (min)</label>
+          <input type="number" id="cfg-d-early" min="0" value="45">
+        </div>
+        <div class="form-row">
+          <label>Seuil retard incorrect Arrivées (min)</label>
+          <input type="number" id="cfg-a-late" min="0" value="60">
+        </div>
+        <div class="form-row">
+          <label>Seuil fin hâtive incorrecte Arrivées (min)</label>
+          <input type="number" id="cfg-a-early" min="0" value="20">
+        </div>
+      </div>
+      <div class="section-heading">Objectifs de productivité (vols/h)</div>
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Objectif Départs (vols/h)</label>
+          <input type="number" id="cfg-d-target" min="0" step="0.1" value="5.0">
+        </div>
+        <div class="form-row">
+          <label>Objectif Arrivées (vols/h)</label>
+          <input type="number" id="cfg-a-target" min="0" step="0.1" value="2.0">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Sauvegarder paramètres</button>
+        <span id="cfg-feedback"></span>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Lignes masquées du Suivi</h2>
+      <span class="text-muted" style="font-size:11px">Lignes que vous avez supprimées via le bouton Supprimer dans Suivi Départs/Arrivées. Restaurez-les ici.</span>
+    </div>
+    <div id="excluded-list"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- Modal preview import -->
+<div class="modal-backdrop" id="import-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="import-modal-title">Aperçu de l'import</h2>
+      <button class="modal-close" id="import-modal-close">×</button>
+    </div>
+    <div class="modal-body" id="import-modal-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   SUIVI DE PERFORMANCE — AÉROPORT
+   Single-file SPA. Toutes les données sont sauvegardées en localStorage.
+============================================================ */
+const STORAGE_KEY = 'suivi_aero_v2';
+
+const DEFAULT_CONFIG = {
+  thresholds: {
+    D: { lateMin: 70, earlyEndMin: 45 },  // Départs : 1h10, 45 min
+    A: { lateMin: 60, earlyEndMin: 20 }   // Arrivées : 1h00, 20 min
+  },
+  productivityTargets: { D: 5.0, A: 2.0 }
+};
+
+// État applicatif
+let state = {
+  employees: [],     // { id, name, agentId, section: 'D'|'A', active }
+  schedules: [],     // { id, date, agentId, employee, projet (1|2|...), startTime, endTime, sourceImportId }
+  timesheets: [],    // { id, date, agentId, employee, projet (1|2|3...), startTime, endTime, atemps, atempsTotal, anote, projetLabel, sourceImportId }
+  surveysD: [],      // { id, date, time, agentId, status, referenceId, sourceImportId } — départs
+  surveysA: [],      // { id, date, time, agentId, status, referenceId, sourceImportId } — arrivées
+  imports: [],       // { id, type: 'schedule'|'timesheet'|'surveysD'|'surveysA', filename, importedAt, datesCovered, rowCount, validRows, errorCount }
+  excludedSuivi: [], // [{ section, date, agentId }] — lignes Suivi masquées par l'utilisateur
+  config: JSON.parse(JSON.stringify(DEFAULT_CONFIG))
+};
+
+// État UI
+const tableStates = {
+  emp:    { sort: 'name', dir: 'asc',  page: 1, pageSize: 100 },
+  sc:     { sort: 'date', dir: 'desc', page: 1, search: '', projet: 'all', pageSize: 30 },
+  ts:     { sort: 'date', dir: 'desc', page: 1, search: '', projet: 'all', pageSize: 30 },
+  survD:  { sort: 'date', dir: 'desc', page: 1, search: '', pageSize: 30 },
+  survA:  { sort: 'date', dir: 'desc', page: 1, search: '', pageSize: 30 },
+  sd:     { sort: 'date', dir: 'desc', period: 'all', from: null, to: null, agent: 'all' },
+  sa:     { sort: 'date', dir: 'desc', period: 'all', from: null, to: null, agent: 'all' },
+  dash:   { sort: 'totalSurveys', dir: 'desc', period: 'week', from: null, to: null }
+};
+
+const charts = {};
+
+/* ---------- UTILITAIRES ---------- */
+function uid() { return 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch(e) { toast('Erreur sauvegarde : ' + e.message, 'error'); }
+}
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return false;
+  try {
+    const p = JSON.parse(raw);
+    state = Object.assign(state, p);
+    state.config = Object.assign({}, DEFAULT_CONFIG, state.config || {});
+    state.config.thresholds = Object.assign({}, DEFAULT_CONFIG.thresholds, (state.config && state.config.thresholds) || {});
+    if (!Array.isArray(state.imports)) state.imports = [];
+    if (!Array.isArray(state.excludedSuivi)) state.excludedSuivi = [];
+    // Re-normaliser tous les agentId à partir du nom (sécurité)
+    state.employees.forEach(e => { if (e.name && !e.agentId) e.agentId = normalizeAgentId(e.name); });
+    return true;
+  } catch(e) { return false; }
+}
+
+/* ---------- NORMALISATION AGENTID ---------- */
+// Reproduit la formule Excel exacte :
+// 1. SI nom complet = "Hagatiana Matthieu Rakotojaona" → "mrakotojaona"
+// 2. SINON formule_base = LOWER(LEFT(nom,1) + MID(nom, FIND(" ")+1, 99)), é/É → e
+// 3. SI formule_base = "mrakotojaon" → "mrakotojaona"
+// 4. SI formule_base = "mberube" → "mfberube"
+// 5. SI formule_base = "etire" → "etire1"
+function normalizeAgentId(fullName) {
+  if (!fullName) return '';
+  const trimmed = String(fullName).trim();
+  // Override 1 : nom complet exact
+  if (trimmed === 'Hagatiana Matthieu Rakotojaona') return 'mrakotojaona';
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx < 0) return trimmed.toLowerCase().replace(/[éÉ]/g, 'e').replace(/\s+/g, '');
+  // Formule de base
+  const first = trimmed[0];
+  const rest = trimmed.substring(spaceIdx + 1);
+  let id = (first + rest).toLowerCase().replace(/[éÉ]/g, 'e').replace(/\s+/g, '');
+  // Overrides 3-5
+  if (id === 'mrakotojaon') return 'mrakotojaona';
+  if (id === 'mberube') return 'mfberube';
+  if (id === 'etire') return 'etire1';
+  return id;
+}
+// Alias rétrocompatible
+function nameToAgentId(n) { return normalizeAgentId(n); }
+
+/* ---------- HELPERS TEMPS ---------- */
+function timeToMin(t) {
+  if (!t || typeof t !== 'string') return null;
+  const parts = t.split(':').map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+  return parts[0] * 60 + parts[1] + (parts[2] ? parts[2]/60 : 0);
+}
+function minToHMS(min) {
+  if (min == null || isNaN(min)) return '';
+  const sign = min < 0 ? '-' : '';
+  min = Math.abs(min);
+  const h = Math.floor(min / 60);
+  const m = Math.floor(min % 60);
+  const s = Math.round((min - Math.floor(min)) * 60);
+  return sign + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+function minToHM(min) {
+  if (min == null || isNaN(min)) return '';
+  const h = Math.floor(min / 60);
+  const m = Math.floor(min % 60);
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+function timeStr(t) {
+  if (!t) return '';
+  const m = timeToMin(t);
+  return m == null ? t : minToHMS(m);
+}
+function fmtDate(d) {
+  if (!d) return '';
+  if (typeof d === 'string') return d;
+  return d.toISOString().slice(0, 10);
+}
+function parseDateStr(s) { return new Date(s + 'T00:00:00'); }
+
+function startOfWeek(d) {
+  const x = new Date(d); const day = x.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  x.setDate(x.getDate() + diff); x.setHours(0,0,0,0); return x;
+}
+function endOfWeek(d) { const x = startOfWeek(d); x.setDate(x.getDate()+6); x.setHours(23,59,59,999); return x; }
+function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d) { const x = new Date(d.getFullYear(), d.getMonth()+1, 0); x.setHours(23,59,59,999); return x; }
+function startOfQuarter(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1); }
+function endOfQuarter(d) { const q = Math.floor(d.getMonth()/3); const x = new Date(d.getFullYear(), q*3+3, 0); x.setHours(23,59,59,999); return x; }
+
+function getDateRange(period, fromStr, toStr) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  switch(period) {
+    case 'week': return { from: startOfWeek(today), to: endOfWeek(today), label: 'Semaine du ' + fmtDate(startOfWeek(today)) };
+    case 'month': return { from: startOfMonth(today), to: endOfMonth(today), label: today.toLocaleDateString('fr-CA', {month:'long', year:'numeric'}) };
+    case 'quarter': return { from: startOfQuarter(today), to: endOfQuarter(today), label: 'T' + (Math.floor(today.getMonth()/3)+1) + ' ' + today.getFullYear() };
+    case 'year': return { from: new Date(today.getFullYear(),0,1), to: new Date(today.getFullYear(),11,31,23,59,59,999), label: 'Année ' + today.getFullYear() };
+    case 'all': return { from: new Date(2000,0,1), to: new Date(2099,11,31), label: 'Tout l\'historique' };
+    case 'custom': {
+      if (!fromStr || !toStr) return { from: today, to: today, label: 'Plage personnalisée' };
+      const f = parseDateStr(fromStr), t = parseDateStr(toStr); t.setHours(23,59,59,999);
+      return { from: f, to: t, label: 'Du ' + fromStr + ' au ' + toStr };
+    }
+  }
+  return { from: today, to: today, label: '' };
+}
+function inRange(dateStr, range) {
+  const d = parseDateStr(dateStr);
+  return d >= range.from && d <= range.to;
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtNum(v, dec=2) { return v == null || isNaN(v) ? '—' : Number(v).toFixed(dec); }
+
+/* ============================================================
+   PARSEURS — HORAIRE / FEUILLE DE TEMPS / SONDAGES
+============================================================ */
+
+// Convertit nombre Excel (numéro de série de date) ou string vers YYYY-MM-DD
+function xlDateToISO(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') {
+    // Excel date serial number
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const ms = epoch.getTime() + v * 86400000;
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+  const s = String(v).trim();
+  // YYYY-MM-DD ou YYYY/MM/DD
+  let m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  // YYYYMMDD
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return null;
+}
+
+// Date au format DD/MM/YYYY (Départs)
+function ddmmyyyyToISO(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') return xlDateToISO(v);
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+  return xlDateToISO(s);
+}
+
+// Date au format MM-DD-YYYY (Arrivées)
+function mmddyyyyToISO(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') return xlDateToISO(v);
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+  if (m) return `${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+  return xlDateToISO(s);
+}
+
+// Heure depuis cellule Excel (string HH:MM ou nombre fraction de jour)
+function xlTimeToHHMM(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') {
+    // fraction de jour
+    const total = Math.round(v * 24 * 60 * 60); // secondes
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + (s ? ':' + String(s).padStart(2,'0') : '');
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+  if (m) {
+    const h = parseInt(m[1]), mi = parseInt(m[2]), se = m[3] ? parseInt(m[3]) : 0;
+    return String(h).padStart(2,'0') + ':' + String(mi).padStart(2,'0') + (se ? ':' + String(se).padStart(2,'0') : '');
+  }
+  return null;
+}
+
+// Pour la feuille de temps : "18 PM" ou "06 AM" → 18 ou 6
+// Le user a confirmé : la valeur numérique est le bon HEURE 24h, le AM/PM est décoratif/erroné
+function parseHeureField(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  const m = s.match(/^(\d+)/);
+  return m ? parseInt(m[1]) : null;
+}
+function parseMinutesField(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  const m = s.match(/^(\d+)/);
+  return m ? parseInt(m[1]) : 0;
+}
+
+// PROJET sur feuille de temps : "ADM ASQ-ACI Départs" / "...Arrivées" → 1 / 2
+function parseProjet(v) {
+  if (v == null) return null;
+  const s = String(v).toLowerCase();
+  if (s.includes('départ') || s.includes('depart')) return 1;
+  if (s.includes('arrivé') || s.includes('arrive')) return 2;
+  // Numérique direct
+  const n = parseInt(s);
+  if (n === 1 || n === 2) return n;
+  return null;
+}
+
+/* ---------- IMPORT HORAIRE ---------- */
+async function importScheduleFile(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheetName = wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+  if (!rows.length) throw new Error('Fichier vide');
+
+  // Détecter colonnes : Date, Employé, Projet, Heure_Début, Heure_Fin
+  const findCol = (keys) => {
+    const headers = Object.keys(rows[0]);
+    for (const k of keys) {
+      const h = headers.find(h => h.toLowerCase().replace(/[\s_]/g,'') === k.toLowerCase().replace(/[\s_]/g,''));
+      if (h) return h;
+    }
+    return null;
+  };
+  const colDate = findCol(['Date','date']);
+  const colEmp = findCol(['Employé','Employe','employee','NOM']);
+  const colProjet = findCol(['Projet','projet']);
+  const colStart = findCol(['Heure_Début','HeureDebut','heure_debut','Début','HeureDebut','start']);
+  const colEnd = findCol(['Heure_Fin','HeureFin','heure_fin','Fin','end']);
+  if (!colDate || !colEmp || !colProjet || !colStart || !colEnd) {
+    throw new Error('Colonnes manquantes. Attendu : Date, Employé, Projet, Heure_Début, Heure_Fin');
+  }
+
+  const parsed = [];
+  const errors = [];
+  for (let i=0; i<rows.length; i++) {
+    const r = rows[i];
+    const date = xlDateToISO(r[colDate]);
+    if (!date) { errors.push('Ligne '+(i+2)+' : date invalide'); continue; }
+    const empName = r[colEmp] ? String(r[colEmp]).trim() : '';
+    if (!empName) { errors.push('Ligne '+(i+2)+' : nom manquant'); continue; }
+    const projet = parseProjet(r[colProjet]);
+    if (!projet) { errors.push('Ligne '+(i+2)+' : projet invalide ('+r[colProjet]+')'); continue; }
+    const startTime = xlTimeToHHMM(r[colStart]);
+    const endTime = xlTimeToHHMM(r[colEnd]);
+    if (!startTime || !endTime) { errors.push('Ligne '+(i+2)+' : heures invalides'); continue; }
+    const agentId = lookupAgentIdByName(empName);
+    parsed.push({ id: uid(), date, employee: empName, agentId, projet, startTime, endTime });
+  }
+  return { parsed, errors, totalRows: rows.length };
+}
+
+// Cherche agent par nom (insensible à casse), sinon applique la formule
+function lookupAgentIdByName(name) {
+  const trimmed = name.trim().toLowerCase();
+  const found = state.employees.find(e => e.name.trim().toLowerCase() === trimmed);
+  if (found) return found.agentId;
+  return nameToAgentId(name);
+}
+function lookupEmployeeByAgentId(agentId) {
+  const found = state.employees.find(e => e.agentId === agentId);
+  return found ? found.name : agentId;
+}
+
+/* ---------- IMPORT FEUILLE DE TEMPS (CWNav CSV ou Excel) ----------
+   Format CWNav : CSV encodé Windows-1252 ou Excel XLSX
+   18 colonnes : _telkey, _h1, NOM, MIFI, AJOUR, HEURES, MINUTES, HEURES_FIN,
+   MINUTES_FIN, PROJET, ATEMPS, ACOMPLET, PROJET2, ATEMPS2, ANOTE, ATEMPS_TOTAL,
+   DEPENSES, AQX
+
+   Particularités :
+   - HEURES = "14 PM", "08 AM", "24 AM" → on prend le nombre, AM/PM ignorés (24 AM = minuit/24:00)
+   - MINUTES = "30 MINUTES" → on prend le nombre
+   - PROJET = "ADM ASQ-ACI Départs" / "...Arrivées" / "Administration" / etc.
+   - PROJET2 + ATEMPS2 : si l'agent fait deux projets le même jour
+   - ATEMPS_TOTAL : heures totales décimales (référence)
+   - Les projets non Départs/Arrivées sont stockés mais marqués pour exclusion des KPIs
+==================================================================== */
+async function importTimesheetFile(file) {
+  // 1) Lire le contenu du fichier en détectant le type (CSV vs Excel)
+  const isCSV = /\.csv$/i.test(file.name);
+  let rows;
+  if (isCSV) {
+    rows = await parseCwnavCSV(file);
+  } else {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+  }
+  if (!rows.length) throw new Error('Fichier vide');
+
+  // 2) Détecter colonnes (insensible à casse / underscores / espaces)
+  const findCol = (keys) => {
+    const headers = Object.keys(rows[0]);
+    for (const k of keys) {
+      const h = headers.find(h => h.toLowerCase().replace(/[\s_]/g,'') === k.toLowerCase().replace(/[\s_]/g,''));
+      if (h) return h;
+    }
+    return null;
+  };
+  const colNom = findCol(['NOM','Nom','nom','Employé','Employe']);
+  const colJour = findCol(['AJOUR','ajour','date']);
+  const colHeures = findCol(['HEURES','heures']);
+  const colMinutes = findCol(['MINUTES','minutes']);
+  const colHeuresFin = findCol(['HEURES_FIN','heuresfin','HeuresFin']);
+  const colMinutesFin = findCol(['MINUTES_FIN','minutesfin','MinutesFin']);
+  const colProjet = findCol(['PROJET','projet']);
+  const colProjet2 = findCol(['PROJET2','projet2']);
+  const colAtemps = findCol(['ATEMPS','atemps']);
+  const colAtemps2 = findCol(['ATEMPS2','atemps2']);
+  const colAtempsTotal = findCol(['ATEMPS_TOTAL','atempstotal']);
+  const colAnote = findCol(['ANOTE','anote','notes']);
+  if (!colNom || !colJour || colHeures == null || colHeuresFin == null || !colProjet) {
+    throw new Error('Colonnes manquantes. Attendu : NOM, AJOUR, HEURES, MINUTES, HEURES_FIN, MINUTES_FIN, PROJET');
+  }
+
+  const parsed = [];
+  const errors = [];
+  let projet1Count = 0, projet2Count = 0, projetOtherCount = 0;
+  for (let i=0; i<rows.length; i++) {
+    const r = rows[i];
+    const nom = r[colNom] ? String(r[colNom]).trim() : '';
+    if (!nom) { errors.push('Ligne '+(i+2)+' : nom manquant'); continue; }
+    const date = xlDateToISO(r[colJour]);
+    if (!date) { errors.push('Ligne '+(i+2)+' : date invalide ('+r[colJour]+')'); continue; }
+
+    // Parse hours (24 AM → 24, 18 PM → 18 — on ignore AM/PM)
+    const h = parseHeureField(r[colHeures]);
+    const mi = parseMinutesField(r[colMinutes]);
+    const hf = parseHeureField(r[colHeuresFin]);
+    const mif = parseMinutesField(r[colMinutesFin]);
+    if (h == null || hf == null) { errors.push('Ligne '+(i+2)+' : heures invalides'); continue; }
+    // 24 AM = minuit (fin de journée). On accepte "24:00" tel quel — timeToMin donne 1440.
+    const startTime = (h === 24) ? '24:00' : String(Math.min(h, 23)).padStart(2,'0') + ':' + String(mi).padStart(2,'0');
+    const endTime   = (hf === 24) ? '24:00' : String(Math.min(hf, 23)).padStart(2,'0') + ':' + String(mif).padStart(2,'0');
+
+    const projetLabel1 = r[colProjet] ? String(r[colProjet]).trim() : '';
+    const projet1 = parseProjet(projetLabel1);
+    const atemps1 = r[colAtemps] != null ? parseFloat(r[colAtemps]) : null;
+    const projetLabel2 = colProjet2 && r[colProjet2] ? String(r[colProjet2]).trim() : '';
+    const projet2 = projetLabel2 ? parseProjet(projetLabel2) : null;
+    const atemps2 = colAtemps2 && r[colAtemps2] != null ? parseFloat(r[colAtemps2]) : null;
+    const atempsTotal = colAtempsTotal && r[colAtempsTotal] != null ? parseFloat(r[colAtempsTotal]) : null;
+    const note = colAnote && r[colAnote] ? String(r[colAnote]) : '';
+    // Décode entités HTML basiques
+    const cleanNote = note.replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+    // Recherche AGENTID via la liste agents (NOM exact) sinon formule
+    const agentId = lookupAgentIdByName(nom);
+
+    // Projet principal : créer une entrée même pour Administration / autres (mais marquée projet=null pour exclusion KPI)
+    parsed.push({
+      id: uid(), date, employee: nom, agentId,
+      projet: projet1,                 // 1 ou 2 ou null si autre
+      projetLabel: projetLabel1,
+      startTime, endTime,
+      atemps: atemps1, atempsTotal,
+      anote: cleanNote
+    });
+    if (projet1 === 1) projet1Count++;
+    else if (projet1 === 2) projet2Count++;
+    else projetOtherCount++;
+
+    // Si PROJET2 existe et est aussi Départs/Arrivées, créer une 2e entrée
+    if (projetLabel2 && projet2) {
+      parsed.push({
+        id: uid(), date, employee: nom, agentId,
+        projet: projet2,
+        projetLabel: projetLabel2,
+        startTime, endTime,                  // mêmes heures globales (le détail intra-jour n'est pas dispo)
+        atemps: atemps2, atempsTotal,
+        anote: cleanNote + ' [secondaire]'
+      });
+      if (projet2 === 1) projet1Count++;
+      else if (projet2 === 2) projet2Count++;
+    } else if (projetLabel2 && !projet2 && atemps2) {
+      // Projet2 non Départs/Arrivées (ex Administration) — stocker quand même, sera exclu des KPIs
+      parsed.push({
+        id: uid(), date, employee: nom, agentId,
+        projet: null,
+        projetLabel: projetLabel2,
+        startTime, endTime,
+        atemps: atemps2, atempsTotal,
+        anote: cleanNote + ' [secondaire]'
+      });
+      projetOtherCount++;
+    }
+  }
+  return { parsed, errors, totalRows: rows.length, projet1Count, projet2Count, projetOtherCount };
+}
+
+/* ---------- Parser CSV CWNav (Windows-1252) ----------
+   Lit le fichier en ArrayBuffer, décode en Windows-1252, parse virgules/quotes
+==================================================================== */
+async function parseCwnavCSV(file) {
+  const buf = await file.arrayBuffer();
+  // Décodeur windows-1252 (équivalent latin1 pour les chars communs)
+  let text;
+  try {
+    text = new TextDecoder('windows-1252').decode(buf);
+  } catch(e) {
+    text = new TextDecoder('iso-8859-1').decode(buf);
+  }
+  // Détecter BOM UTF-8 et redécoder
+  if (buf.byteLength >= 3) {
+    const view = new Uint8Array(buf);
+    if (view[0] === 0xEF && view[1] === 0xBB && view[2] === 0xBF) {
+      text = new TextDecoder('utf-8').decode(buf);
+    }
+  }
+  // Parser CSV simple gérant les guillemets
+  const rows = [];
+  let cur = [], field = '', inQuotes = false;
+  for (let i=0; i<text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { cur.push(field); field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; }
+      else field += c;
+    }
+  }
+  if (field.length > 0 || cur.length > 0) { cur.push(field); rows.push(cur); }
+  // Filtrer toutes les lignes vides — certains exports CWNav commencent par une ligne vide (LF en position 0)
+  const nonEmptyRows = rows.filter(r => r.length > 1 || (r.length === 1 && r[0] && r[0].trim() !== ''));
+  if (nonEmptyRows.length < 2) return [];
+  const headers = nonEmptyRows[0].map(h => (h || '').trim());
+  const out = [];
+  for (let i=1; i<nonEmptyRows.length; i++) {
+    const obj = {};
+    headers.forEach((h, j) => { obj[h] = nonEmptyRows[i][j] != null ? nonEmptyRows[i][j] : null; });
+    out.push(obj);
+  }
+  return out;
+}
+
+/* ---------- IMPORT SONDAGES (Départs / Arrivées) ---------- */
+async function importSurveysFile(file, type) {
+  // type = 'D' ou 'A'
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  // Chercher onglet "Live Data" sinon premier
+  let sheetName = wb.SheetNames.find(n => n.toLowerCase().replace(/\s/g,'') === 'livedata') || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: true });
+  if (!rows.length) throw new Error('Fichier vide');
+
+  const headers = Object.keys(rows[0]);
+  const findCol = (...names) => {
+    for (const n of names) {
+      const h = headers.find(h => h.trim().toLowerCase() === n.toLowerCase());
+      if (h) return h;
+    }
+    return null;
+  };
+
+  let colDate, colTime, colAgent, colStatus, colRef, dateParser, validStatus;
+  if (type === 'D') {
+    colDate = findCol('Agent_Date');
+    colTime = findCol('Agent_Time');
+    colAgent = findCol('Agent_User');
+    colStatus = findCol('Status');
+    colRef = findCol('Reference_ID','ReferenceID');
+    dateParser = ddmmyyyyToISO;
+    validStatus = 'Completed';
+  } else {
+    colDate = findCol('Date_interview','Date_Interview');
+    colTime = findCol('Time_interview','Time_Interview');
+    colAgent = findCol('AgentID','Agent_ID','Agent_User');
+    colStatus = findCol('SMT_status','SMTStatus','SMT_Status');
+    colRef = findCol('ResponseID','Response_ID','Reference_ID');
+    dateParser = mmddyyyyToISO;
+    validStatus = 'On-target';
+  }
+  if (!colDate || !colTime || !colAgent || !colStatus) {
+    throw new Error('Colonnes manquantes pour sondages ' + (type==='D'?'Départs':'Arrivées'));
+  }
+
+  const parsed = [];
+  const errors = [];
+  let kept = 0, filtered = 0;
+  for (let i=0; i<rows.length; i++) {
+    const r = rows[i];
+    const dateRaw = r[colDate];
+    const date = dateParser(dateRaw);
+    if (!date) { errors.push('Ligne '+(i+2)+' : date invalide ('+dateRaw+')'); continue; }
+    const time = xlTimeToHHMM(r[colTime]);
+    if (!time) { errors.push('Ligne '+(i+2)+' : heure invalide'); continue; }
+    const agentId = r[colAgent] ? String(r[colAgent]).trim() : '';
+    if (!agentId) { errors.push('Ligne '+(i+2)+' : agent manquant'); continue; }
+    const status = r[colStatus] ? String(r[colStatus]).trim() : '';
+    parsed.push({
+      id: uid(), date, time, agentId, status,
+      referenceId: r[colRef] ? String(r[colRef]) : ''
+    });
+    if (status === validStatus) kept++; else filtered++;
+  }
+  return { parsed, errors, totalRows: rows.length, kept, filtered, validStatus };
+}
+
+/* ============================================================
+   APPLY IMPORT (option C : remplacement par dates couvertes)
+   + traçage : on ajoute une entrée à state.imports pour pouvoir
+     retrouver/retirer un import en bloc plus tard
+============================================================ */
+function applyImport(kind, parsed, fileName, parseInfo) {
+  parseInfo = parseInfo || {};
+  // 1. Dates uniques touchées par l'import
+  const datesTouched = Array.from(new Set(parsed.map(p => p.date))).sort();
+  // 2. ID de l'import + estampille de chaque entrée (sourceImportId)
+  const importId = uid();
+  parsed.forEach(p => p.sourceImportId = importId);
+  let removed = 0;
+  const datesSet = new Set(datesTouched);
+  if (kind === 'schedule') {
+    const before = state.schedules.length;
+    state.schedules = state.schedules.filter(s => !datesSet.has(s.date));
+    removed = before - state.schedules.length;
+    state.schedules.push(...parsed);
+  } else if (kind === 'timesheet') {
+    const before = state.timesheets.length;
+    state.timesheets = state.timesheets.filter(t => !datesSet.has(t.date));
+    removed = before - state.timesheets.length;
+    state.timesheets.push(...parsed);
+  } else if (kind === 'surveysD') {
+    const before = state.surveysD.length;
+    state.surveysD = state.surveysD.filter(s => !datesSet.has(s.date));
+    removed = before - state.surveysD.length;
+    state.surveysD.push(...parsed);
+  } else if (kind === 'surveysA') {
+    const before = state.surveysA.length;
+    state.surveysA = state.surveysA.filter(s => !datesSet.has(s.date));
+    removed = before - state.surveysA.length;
+    state.surveysA.push(...parsed);
+  }
+  // 3. Si un import précédent ne touche plus aucune ligne (cas remplacement complet), l'orpheliner
+  cleanupOrphanImports();
+  // 4. Enregistrer l'import dans la liste
+  if (!state.imports) state.imports = [];
+  state.imports.push({
+    id: importId,
+    type: kind,
+    filename: fileName || 'sans-nom',
+    importedAt: new Date().toISOString(),
+    datesCovered: datesTouched,
+    rowCount: (parseInfo.totalRows != null ? parseInfo.totalRows : parsed.length),
+    validRows: parsed.length,
+    errorCount: parseInfo.errorCount || 0
+  });
+  saveState();
+  return { dates: datesTouched.length, removed, added: parsed.length, importId };
+}
+
+/* ============================================================
+   GESTION DES IMPORTS (liste + suppression bloc)
+============================================================ */
+function cleanupOrphanImports() {
+  if (!state.imports) state.imports = [];
+  // Compter combien de lignes restent par sourceImportId, à travers les 4 collections
+  const counts = {};
+  const inc = (id) => { if (id) counts[id] = (counts[id] || 0) + 1; };
+  state.schedules.forEach(s => inc(s.sourceImportId));
+  state.timesheets.forEach(t => inc(t.sourceImportId));
+  state.surveysD.forEach(s => inc(s.sourceImportId));
+  state.surveysA.forEach(s => inc(s.sourceImportId));
+  state.imports = state.imports.filter(imp => counts[imp.id]);
+}
+function removeImport(importId) {
+  if (!state.imports) state.imports = [];
+  const imp = state.imports.find(i => i.id === importId);
+  if (!imp) return false;
+  // Supprimer les entrées de la collection correspondante
+  if (imp.type === 'schedule')   state.schedules  = state.schedules.filter(x => x.sourceImportId !== importId);
+  if (imp.type === 'timesheet')  state.timesheets = state.timesheets.filter(x => x.sourceImportId !== importId);
+  if (imp.type === 'surveysD')   state.surveysD   = state.surveysD.filter(x => x.sourceImportId !== importId);
+  if (imp.type === 'surveysA')   state.surveysA   = state.surveysA.filter(x => x.sourceImportId !== importId);
+  state.imports = state.imports.filter(i => i.id !== importId);
+  saveState();
+  return true;
+}
+
+/* ============================================================
+   MOTEUR DE CALCUL — SUIVI DÉPARTS / ARRIVÉES
+============================================================ */
+function buildSuivi(section /* 'D' or 'A' */) {
+  // Pour chaque (date, agentId) où on a soit un horaire, soit une feuille de temps, soit des sondages
+  // → générer une ligne avec les 21 colonnes calculées
+  // Les lignes masquées via le bouton Supprimer (state.excludedSuivi) sont exclues ICI
+  // pour que Dashboard + Évolution + Suivi en tiennent tous compte automatiquement.
+
+  const projet = section === 'D' ? 1 : 2;
+  const surveys = section === 'D' ? state.surveysD : state.surveysA;
+  const validStatus = section === 'D' ? 'Completed' : 'On-target';
+  const seuils = state.config.thresholds[section] || DEFAULT_CONFIG.thresholds[section];
+
+  // Liste d'exclusion pour cette section (clé : date|agentId)
+  const excludedSet = new Set(
+    (state.excludedSuivi || []).filter(x => x.section === section).map(x => x.date + '|' + x.agentId)
+  );
+  const isExcluded = (date, agentId) => excludedSet.has(date + '|' + agentId);
+
+  // 1. Construire l'ensemble des paires (date, agentId) à traiter
+  const keys = new Set();
+  state.schedules.filter(s => s.projet === projet && !isExcluded(s.date, s.agentId)).forEach(s => keys.add(s.date + '|' + s.agentId));
+  state.timesheets.filter(t => t.projet === projet && !isExcluded(t.date, t.agentId)).forEach(t => keys.add(t.date + '|' + t.agentId));
+  surveys.forEach(s => {
+    if (s.status === validStatus && !isExcluded(s.date, s.agentId)) keys.add(s.date + '|' + s.agentId);
+  });
+
+  // 2. Pré-indexer
+  const schedIdx = {};
+  state.schedules.filter(s => s.projet === projet).forEach(s => { schedIdx[s.date + '|' + s.agentId] = s; });
+  const tsIdx = {};
+  state.timesheets.filter(t => t.projet === projet).forEach(t => { tsIdx[t.date + '|' + t.agentId] = t; });
+  const survByKey = {};
+  surveys.filter(s => s.status === validStatus).forEach(s => {
+    const k = s.date + '|' + s.agentId;
+    if (!survByKey[k]) survByKey[k] = [];
+    survByKey[k].push(s);
+  });
+
+  const rows = [];
+  for (const k of keys) {
+    const [date, agentId] = k.split('|');
+    const sched = schedIdx[k];
+    const ts = tsIdx[k];
+    const surveysList = survByKey[k] || [];
+
+    // Employé
+    const employee = sched ? sched.employee : (ts ? ts.employee : lookupEmployeeByAgentId(agentId));
+
+    // Heures horaire
+    const schedStart = sched ? sched.startTime : null;
+    const schedEnd = sched ? sched.endTime : null;
+    const schedStartMin = schedStart ? timeToMin(schedStart) : null;
+    const schedEndMin = schedEnd ? timeToMin(schedEnd) : null;
+    let schedHours = null;
+    if (schedStartMin != null && schedEndMin != null) {
+      // MOD pour gérer overnight (Départ peut commencer 22h et finir 02h)
+      schedHours = ((schedEndMin - schedStartMin) % 1440 + 1440) % 1440;
+      if (schedHours === 0) schedHours = null;
+    }
+
+    // Feuille de temps
+    const tsStart = ts ? ts.startTime : null;
+    const tsEnd = ts ? ts.endTime : null;
+    const tsStartMin = tsStart ? timeToMin(tsStart) : null;
+    const tsEndMin = tsEnd ? timeToMin(tsEnd) : null;
+
+    // Sondages : 1er et dernier
+    let firstSurveyMin = null, lastSurveyMin = null, firstSurvey = null, lastSurvey = null;
+    if (surveysList.length) {
+      const mins = surveysList.map(s => timeToMin(s.time)).filter(m => m != null);
+      if (mins.length) {
+        firstSurveyMin = Math.min(...mins);
+        lastSurveyMin = Math.max(...mins);
+        firstSurvey = minToHMS(firstSurveyMin);
+        lastSurvey = minToHMS(lastSurveyMin);
+      }
+    }
+
+    // Heures réelles = dernier - premier sondage
+    let actualHours = null;
+    if (firstSurveyMin != null && lastSurveyMin != null) {
+      actualHours = lastSurveyMin - firstSurveyMin;
+    }
+
+    // Différence prévues vs réelles
+    const diffHours = (schedHours != null && actualHours != null) ? Math.abs(schedHours - actualHours) : null;
+
+    // Retard début = MAX(0, 1er sondage - début feuille de temps)
+    let lateMin = null;
+    if (firstSurveyMin != null && tsStartMin != null) {
+      lateMin = Math.max(0, firstSurveyMin - tsStartMin);
+    }
+
+    // Fin hâtive = MAX(0, fin feuille de temps - dernier sondage)
+    let earlyEndMin = null;
+    if (lastSurveyMin != null && tsEndMin != null) {
+      earlyEndMin = Math.max(0, tsEndMin - lastSurveyMin);
+    }
+
+    // Heure début incorrecte = MAX(0, retard - seuil)
+    const incorrectStart = lateMin != null ? Math.max(0, lateMin - seuils.lateMin) : null;
+    // Heure fin incorrecte = MAX(0, fin hâtive - seuil)
+    const incorrectEnd = earlyEndMin != null ? Math.max(0, earlyEndMin - seuils.earlyEndMin) : null;
+
+    // Nombre de vols (déjà filtrés par status)
+    const surveysCount = surveysList.length;
+    // Vols/heure = surveys / (actualHours / 60)
+    const surveysPerHour = (surveysCount > 0 && actualHours != null && actualHours > 0) ? surveysCount / (actualHours / 60) : null;
+
+    // Absence stricte = horaire prévu existe ET aucun sondage ET aucune feuille de temps
+    const hasSchedule = !!sched;
+    const hasSurveys = surveysCount > 0;
+    const hasTimesheet = !!ts;
+    const absence = hasSchedule && !hasSurveys && !hasTimesheet;
+
+    rows.push({
+      date, agentId, employee,
+      schedStart, schedEnd, schedStartMin, schedEndMin,
+      tsStart, tsEnd, tsStartMin, tsEndMin,
+      firstSurvey, lastSurvey, firstSurveyMin, lastSurveyMin,
+      schedHours, actualHours, diffHours,
+      lateMin, earlyEndMin, incorrectStart, incorrectEnd,
+      surveys: surveysCount, surveysPerHour,
+      hasSchedule, hasSurveys, hasTimesheet,
+      absence: absence ? 1 : 0
+    });
+  }
+  return rows;
+}
+
+/* ============================================================
+   RENDU GÉNÉRAL
+============================================================ */
+function renderExcludedList() {
+  const container = document.getElementById('excluded-list');
+  if (!container) return;
+  const list = state.excludedSuivi || [];
+  if (!list.length) { container.innerHTML = '<div class="empty-state">Aucune ligne masquée.</div>'; return; }
+  container.innerHTML = list.map((x, i) => `
+    <div class="import-row">
+      <div class="file-icon">×</div>
+      <div class="file-info">
+        <div class="file-name">${x.section === 'D' ? 'Départs' : 'Arrivées'} · ${x.date} · <code>${escapeHtml(x.agentId)}</code></div>
+      </div>
+      <div class="file-actions">
+        <button class="btn btn-sm" data-restore-excl="${i}">Restaurer</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function refreshAll() {
+  populateAgentSelects();
+  renderEmployeesTable();
+  renderExcludedList();
+  renderScheduleStats();
+  renderScheduleTable();
+  renderTimesheetStats();
+  renderTimesheetTable();
+  renderSurveysStats('D');
+  renderSurveysStats('A');
+  renderSurveysTable('D');
+  renderSurveysTable('A');
+  renderSuivi('D');
+  renderSuivi('A');
+  renderAllImportsPanels();
+  renderMultiSelectAgents();
+  renderDashboard();
+  renderEvolution();
+}
+
+/* ============================================================
+   ÉVOLUTION MENSUELLE — box plots + bar charts par mois
+============================================================ */
+const EVOL_PALETTE = ['#38bdf8','#fb923c','#f59e0b','#10b981','#a78bfa','#f43f5e','#06b6d4','#84cc16'];
+function getAgentColorMap() {
+  const map = {};
+  state.employees.forEach((e, i) => { map[e.agentId] = EVOL_PALETTE[i % EVOL_PALETTE.length]; });
+  return map;
+}
+function monthKey(dateStr) { return dateStr.slice(0, 7); } // YYYY-MM
+function monthLabel(key) {
+  const months = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const [y, m] = key.split('-');
+  return months[parseInt(m)-1] + ' ' + y;
+}
+
+// Calcul stats box plot pour un tableau de valeurs numériques
+function bpStats(values) {
+  const arr = values.filter(v => v != null && !isNaN(v)).slice().sort((a,b) => a-b);
+  if (!arr.length) return null;
+  const q = (p) => {
+    const idx = (arr.length - 1) * p;
+    const lo = Math.floor(idx), hi = Math.ceil(idx);
+    return lo === hi ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (idx - lo);
+  };
+  const Q1 = q(0.25), median = q(0.5), Q3 = q(0.75);
+  const iqr = Q3 - Q1;
+  const lowFence = Q1 - 1.5 * iqr, highFence = Q3 + 1.5 * iqr;
+  let whiskerLo = arr[0], whiskerHi = arr[arr.length - 1];
+  for (const v of arr) { if (v >= lowFence) { whiskerLo = v; break; } }
+  for (let i = arr.length - 1; i >= 0; i--) { if (arr[i] <= highFence) { whiskerHi = arr[i]; break; } }
+  const outliers = arr.filter(v => v < lowFence || v > highFence);
+  const mean = arr.reduce((a,b) => a+b, 0) / arr.length;
+  return { Q1, median, Q3, whiskerLo, whiskerHi, outliers, mean, n: arr.length };
+}
+
+// Box plot interactif avec Chart.js + plugin @sgratzl/chartjs-chart-boxplot
+// Tooltips natifs au survol affichent min/Q1/médiane/Q3/max/moyenne
+function drawBoxPlot(canvas, monthsData, target, color) {
+  if (!canvas) return;
+  const chartId = canvas.id;
+  destroyChart(chartId);
+  const labels = monthsData.map(m => m.label);
+  const data = monthsData.map(m => m.values || []);
+  const accent = color || '#0891b2';
+  const targetPlugin = {
+    id: 'targetLine_' + chartId,
+    afterDraw(chart) {
+      if (target == null) return;
+      const ctx = chart.ctx;
+      const yScale = chart.scales.y;
+      if (!yScale) return;
+      const y = yScale.getPixelForValue(target);
+      const xLeft = chart.chartArea.left, xRight = chart.chartArea.right;
+      ctx.save();
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(xLeft, y); ctx.lineTo(xRight, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#dc2626';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Objectif ' + target.toFixed(1), xLeft + 6, y - 5);
+      ctx.restore();
+    }
+  };
+  // Vérification que le plugin boxplot est disponible
+  let boxplotAvailable = false;
+  try {
+    if (Chart && Chart.registry && typeof Chart.registry.getController === 'function') {
+      try { Chart.registry.getController('boxplot'); boxplotAvailable = true; } catch(e) { boxplotAvailable = false; }
+    }
+  } catch(e) {}
+  if (!boxplotAvailable) {
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width; canvas.height = rect.height;
+    ctx.fillStyle = '#fef3c7'; ctx.fillRect(0,0,rect.width,rect.height);
+    ctx.fillStyle = '#92400e'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Plugin box plot non chargé. Vérifiez votre connexion Internet.', rect.width/2, rect.height/2);
+    return;
+  }
+  const hasData = data.some(d => d.length > 0);
+  if (!hasData) {
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width; canvas.height = rect.height;
+    ctx.fillStyle = '#f9fafb'; ctx.fillRect(0,0,rect.width,rect.height);
+    ctx.fillStyle = '#9ca3af'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Aucune donnée — importez des sondages pour cette période', rect.width/2, rect.height/2 - 8);
+    ctx.fillStyle = '#d1d5db'; ctx.font = '11px sans-serif';
+    ctx.fillText('Vols/h calculé à partir des sondages.', rect.width/2, rect.height/2 + 12);
+    return;
+  }
+  charts[chartId] = new Chart(canvas, {
+    type: 'boxplot',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Vols/heure',
+        data,
+        backgroundColor: accent + '33',
+        borderColor: accent,
+        borderWidth: 1.5,
+        outlierBackgroundColor: '#dc2626',
+        outlierBorderColor: '#dc2626',
+        outlierRadius: 4,
+        meanBackgroundColor: '#f59e0b',
+        meanBorderColor: '#f59e0b',
+        meanRadius: 5,
+        itemRadius: 0,
+        medianColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          backgroundColor: '#111827',
+          titleColor: '#fff',
+          bodyColor: '#fff',
+          padding: 10,
+          callbacks: {
+            label: function(context) {
+              const stats = context.parsed;
+              if (!stats) return '';
+              const lines = [
+                'n = ' + (stats.items ? stats.items.length : 0),
+                'Min : ' + (stats.min != null ? stats.min.toFixed(2) : '—'),
+                'Q1 : ' + (stats.q1 != null ? stats.q1.toFixed(2) : '—'),
+                'Médiane : ' + (stats.median != null ? stats.median.toFixed(2) : '—'),
+                'Q3 : ' + (stats.q3 != null ? stats.q3.toFixed(2) : '—'),
+                'Max : ' + (stats.max != null ? stats.max.toFixed(2) : '—'),
+                'Moyenne : ' + (stats.mean != null ? stats.mean.toFixed(2) : '—')
+              ];
+              if (target != null) lines.push('Objectif : ' + target.toFixed(1));
+              return lines;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { weight: 'bold' } } },
+        y: { beginAtZero: true, title: { display: true, text: 'Vols / heure' } }
+      }
+    },
+    plugins: [targetPlugin]
+  });
+}
+
+function getEvolPeriodRange() {
+  const st = tableStates.evol = tableStates.evol || { period: 'all', from: null, to: null };
+  return getDateRange(st.period, st.from, st.to);
+}
+
+function computeMonthlyData(section) {
+  const range = getEvolPeriodRange();
+  const rows = buildSuivi(section).filter(r => inRange(r.date, range));
+  // Group by month
+  const byMonth = {};
+  rows.forEach(r => {
+    const k = monthKey(r.date);
+    if (!byMonth[k]) byMonth[k] = { key: k, label: monthLabel(k), perAgent: {}, rows: [] };
+    byMonth[k].rows.push(r);
+    if (r.surveysPerHour != null) {
+      // Liste par mois pour box plot
+    }
+    if (!byMonth[k].perAgent[r.agentId]) byMonth[k].perAgent[r.agentId] = { incorrectStart: 0, incorrectEnd: 0, absences: 0, surveysPerHourValues: [] };
+    const a = byMonth[k].perAgent[r.agentId];
+    if (r.incorrectStart > 0) a.incorrectStart++;
+    if (r.incorrectEnd > 0) a.incorrectEnd++;
+    if (r.absence) a.absences++;
+    if (r.surveysPerHour != null) a.surveysPerHourValues.push(r.surveysPerHour);
+  });
+  return Object.values(byMonth).sort((a,b) => a.key.localeCompare(b.key));
+}
+
+function renderEvolution() {
+  const st = tableStates.evol = tableStates.evol || { period: 'all', from: null, to: null };
+  const range = getEvolPeriodRange();
+  const periodLabel = document.getElementById('evol-period-label');
+  if (periodLabel) periodLabel.textContent = range.label;
+
+  const targets = state.config.productivityTargets || { D: 5.0, A: 2.0 };
+  const tdLbl = document.getElementById('evol-target-d-lbl');
+  const taLbl = document.getElementById('evol-target-a-lbl');
+  if (tdLbl) tdLbl.textContent = targets.D.toFixed(1);
+  if (taLbl) taLbl.textContent = targets.A.toFixed(1);
+
+  // Filtre multi-agents (hérité du dashboard si dispo)
+  const selectedSet = (state.ui && state.ui.selectedAgents) ? new Set(state.ui.selectedAgents) : null;
+
+  // Box plots interactifs
+  ['D', 'A'].forEach(section => {
+    const monthly = computeMonthlyData(section);
+    const monthsData = monthly.map(m => {
+      const allVals = [];
+      Object.entries(m.perAgent).forEach(([aid, st]) => {
+        if (selectedSet && !selectedSet.has(aid)) return;
+        allVals.push(...st.surveysPerHourValues);
+      });
+      return { label: m.label, values: allVals };
+    });
+    const canvas = document.getElementById(section === 'D' ? 'evol-box-d' : 'evol-box-a');
+    const color = section === 'D' ? '#1e40af' : '#ea580c';
+    if (canvas) drawBoxPlot(canvas, monthsData, targets[section], color);
+  });
+
+  // Bar charts mensuels (Chart.js stacked par agent)
+  const colorMap = getAgentColorMap();
+  function makeMonthlyBar(canvasId, section, metric) {
+    const monthly = computeMonthlyData(section);
+    const labels = monthly.map(m => m.label);
+    const agents = state.employees.filter(e => e.section === section).filter(e => !selectedSet || selectedSet.has(e.agentId));
+    const datasets = agents.map(emp => ({
+      label: emp.name.split(' ')[0],
+      data: monthly.map(m => (m.perAgent[emp.agentId] ? m.perAgent[emp.agentId][metric] : 0)),
+      backgroundColor: colorMap[emp.agentId] || '#888'
+    }));
+    destroyChart(canvasId);
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    charts[canvasId] = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+        scales: {
+          x: { stacked: false, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+      }
+    });
+  }
+  makeMonthlyBar('evol-bar-late-d', 'D', 'incorrectStart');
+  makeMonthlyBar('evol-bar-late-a', 'A', 'incorrectStart');
+  makeMonthlyBar('evol-bar-early-d', 'D', 'incorrectEnd');
+  makeMonthlyBar('evol-bar-early-a', 'A', 'incorrectEnd');
+
+  // Absences par mois (combiné D+A)
+  const monthlyD = computeMonthlyData('D');
+  const monthlyA = computeMonthlyData('A');
+  const allMonthKeys = Array.from(new Set([...monthlyD.map(m=>m.key), ...monthlyA.map(m=>m.key)])).sort();
+  const labelsAbs = allMonthKeys.map(k => monthLabel(k));
+  const dataD = allMonthKeys.map(k => {
+    const m = monthlyD.find(x => x.key === k); if (!m) return 0;
+    return Object.entries(m.perAgent).reduce((s, [aid, a]) => (selectedSet && !selectedSet.has(aid)) ? s : s + a.absences, 0);
+  });
+  const dataA = allMonthKeys.map(k => {
+    const m = monthlyA.find(x => x.key === k); if (!m) return 0;
+    return Object.entries(m.perAgent).reduce((s, [aid, a]) => (selectedSet && !selectedSet.has(aid)) ? s : s + a.absences, 0);
+  });
+  destroyChart('evol-bar-abs');
+  const cAbs = document.getElementById('evol-bar-abs');
+  if (cAbs) {
+    charts['evol-bar-abs'] = new Chart(cAbs, {
+      type: 'bar',
+      data: { labels: labelsAbs, datasets: [
+        { label: 'Départs', data: dataD, backgroundColor: '#1e40af' },
+        { label: 'Arrivées', data: dataA, backgroundColor: '#ea580c' }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      }
+    });
+  }
+}
+
+function destroyChart(id) {
+  if (charts[id]) { try { charts[id].destroy(); } catch(e){} delete charts[id]; }
+}
+
+function populateAgentSelects() {
+  const optsAll = state.employees.sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.agentId}">${escapeHtml(e.name)} (${e.agentId})</option>`).join('');
+  const optsD = state.employees.filter(e => e.section === 'D').sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.agentId}">${escapeHtml(e.name)}</option>`).join('');
+  const optsA = state.employees.filter(e => e.section === 'A').sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.agentId}">${escapeHtml(e.name)}</option>`).join('');
+  document.getElementById('sd-agent').innerHTML = '<option value="all">Tous</option>' + optsD;
+  document.getElementById('sa-agent').innerHTML = '<option value="all">Tous</option>' + optsA;
+  populateScheduleEmployeeSelect();
+}
+
+/* ---------- TRI ---------- */
+function sortRows(rows, key, dir, getter) {
+  const sign = dir === 'desc' ? -1 : 1;
+  return rows.slice().sort((a,b) => {
+    const va = getter(a, key), vb = getter(b, key);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sign;
+    return String(va).localeCompare(String(vb), 'fr', { numeric: true }) * sign;
+  });
+}
+function paginate(rows, page, pageSize) {
+  const total = Math.max(1, Math.ceil(rows.length / pageSize));
+  const p = Math.min(Math.max(1, page), total);
+  return { rows: rows.slice((p-1)*pageSize, p*pageSize), page: p, totalPages: total };
+}
+function renderPagination(container, current, total, onClick) {
+  if (total <= 1) { container.innerHTML = ''; return; }
+  let html = '';
+  html += `<button class="btn btn-sm" ${current===1?'disabled':''} data-go="${current-1}">‹</button>`;
+  for (let i=1; i<=total; i++) {
+    if (total > 7 && i > 2 && i < total - 1 && Math.abs(i - current) > 1) {
+      if (i === 3 && current > 4) html += '<span style="padding:0 4px">…</span>';
+      else if (i === total - 2 && current < total - 3) html += '<span style="padding:0 4px">…</span>';
+      continue;
+    }
+    html += `<button class="btn btn-sm ${i===current?'active':''}" data-go="${i}">${i}</button>`;
+  }
+  html += `<button class="btn btn-sm" ${current===total?'disabled':''} data-go="${current+1}">›</button>`;
+  container.innerHTML = html;
+  container.querySelectorAll('button[data-go]').forEach(b => b.addEventListener('click', () => onClick(parseInt(b.dataset.go))));
+}
+function applySortHeaders(tableSel, st) {
+  document.querySelectorAll(tableSel + ' thead th').forEach(th => {
+    th.classList.remove('sorted', 'sorted-desc');
+    if (th.dataset.sort === st.sort) th.classList.add(st.dir === 'desc' ? 'sorted-desc' : 'sorted');
+  });
+}
+
+/* ============================================================
+   AGENTS (CONFIGURATION)
+============================================================ */
+function renderEmployeesTable() {
+  const tbody = document.querySelector('#emp-table tbody');
+  const st = tableStates.emp;
+  const rows = sortRows(state.employees, st.sort, st.dir, (e,k) => e[k]);
+  applySortHeaders('#emp-table', st);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Aucun agent. Ajoutez-en un ci-dessus.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(e => `
+    <tr>
+      <td><strong>${escapeHtml(e.name)}</strong></td>
+      <td><code>${escapeHtml(e.agentId)}</code></td>
+      <td>${e.section === 'D' ? '<span class="badge badge-blue">Départs</span>' : '<span class="badge badge-acceptable">Arrivées</span>'}</td>
+      <td>${e.active ? '<span class="badge badge-good">Actif</span>' : '<span class="badge badge-neutral">Inactif</span>'}</td>
+      <td><div class="row-actions">
+        <button class="btn btn-sm" data-edit-emp="${e.id}">Modifier</button>
+        <button class="btn btn-sm btn-danger" data-del-emp="${e.id}">Supprimer</button>
+      </div></td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('form-employee').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('emp-edit-id').value;
+  const name = document.getElementById('emp-name').value.trim();
+  const agentId = document.getElementById('emp-agentid').value.trim().toLowerCase();
+  const section = document.getElementById('emp-section').value;
+  const active = document.getElementById('emp-active').value === 'true';
+  if (!name || !agentId) { showFormFeedback('emp-feedback', 'Champs obligatoires manquants', 'error'); return; }
+  // Vérifier unicité agentId
+  const dup = state.employees.find(x => x.agentId === agentId && x.id !== id);
+  if (dup) { showFormFeedback('emp-feedback', 'AGENTID déjà utilisé : ' + agentId, 'error'); return; }
+  const obj = { id: id || uid(), name, agentId, section, active };
+  if (id) state.employees = state.employees.map(x => x.id === id ? obj : x);
+  else state.employees.push(obj);
+  saveState();
+  resetEmployeeForm();
+  showFormFeedback('emp-feedback', 'Agent enregistré', 'success');
+  refreshAll();
+});
+function resetEmployeeForm() {
+  document.getElementById('emp-edit-id').value = '';
+  document.getElementById('form-employee').reset();
+  document.getElementById('emp-active').value = 'true';
+  document.getElementById('emp-section').value = 'D';
+  document.getElementById('emp-cancel').style.display = 'none';
+}
+document.getElementById('emp-cancel').addEventListener('click', resetEmployeeForm);
+document.getElementById('emp-fill-id').addEventListener('click', () => {
+  const name = document.getElementById('emp-name').value.trim();
+  if (name) document.getElementById('emp-agentid').value = nameToAgentId(name);
+});
+
+/* ============================================================
+   HORAIRES
+============================================================ */
+function renderScheduleStats() {
+  const container = document.getElementById('schedule-stats');
+  if (!state.schedules.length) { container.innerHTML = '<div class="text-muted">Aucune donnée importée.</div>'; return; }
+  const dates = new Set(state.schedules.map(s => s.date));
+  const minDate = Array.from(dates).sort()[0];
+  const maxDate = Array.from(dates).sort().slice(-1)[0];
+  const dCount = state.schedules.filter(s => s.projet === 1).length;
+  const aCount = state.schedules.filter(s => s.projet === 2).length;
+  container.innerHTML = `
+    <div class="stat"><div class="lbl">Total entrées</div><div class="val">${state.schedules.length}</div></div>
+    <div class="stat"><div class="lbl">Jours couverts</div><div class="val">${dates.size}</div></div>
+    <div class="stat"><div class="lbl">Période</div><div class="val">${minDate} → ${maxDate}</div></div>
+    <div class="stat"><div class="lbl">Départs / Arrivées</div><div class="val">${dCount} / ${aCount}</div></div>
+  `;
+}
+function renderScheduleTable() {
+  const tbody = document.querySelector('#sc-table tbody');
+  const st = tableStates.sc;
+  let rows = state.schedules.map(s => {
+    const sm = timeToMin(s.startTime), em = timeToMin(s.endTime);
+    let hours = null;
+    if (sm != null && em != null) { hours = ((em - sm) % 1440 + 1440) % 1440; }
+    return { ...s, hours };
+  });
+  if (st.search) {
+    const q = st.search.toLowerCase();
+    rows = rows.filter(r => (r.employee||'').toLowerCase().includes(q) || (r.agentId||'').toLowerCase().includes(q));
+  }
+  if (st.projet !== 'all') rows = rows.filter(r => r.projet === parseInt(st.projet));
+  rows = sortRows(rows, st.sort, st.dir, (r,k) => r[k]);
+  applySortHeaders('#sc-table', st);
+  const pag = paginate(rows, st.page, st.pageSize); st.page = pag.page;
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Aucun horaire.</td></tr>'; }
+  else tbody.innerHTML = pag.rows.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td><strong>${escapeHtml(r.employee||'')}</strong></td>
+      <td><code>${escapeHtml(r.agentId||'')}</code></td>
+      <td>${r.projet === 1 ? '<span class="badge badge-blue">Départs</span>' : '<span class="badge badge-acceptable">Arrivées</span>'}</td>
+      <td>${r.startTime}</td>
+      <td>${r.endTime}</td>
+      <td class="num">${r.hours != null ? minToHMS(r.hours) : '—'}</td>
+      <td>
+        <button class="btn btn-sm" data-edit-sc="${r.id}">Modifier</button>
+        <button class="btn btn-sm btn-danger" data-del-sc="${r.id}">Supprimer</button>
+      </td>
+    </tr>
+  `).join('');
+  renderPagination(document.getElementById('sc-pagination'), pag.page, pag.totalPages, p => { st.page = p; renderScheduleTable(); });
+}
+
+/* ============================================================
+   FEUILLE DE TEMPS
+============================================================ */
+function renderTimesheetStats() {
+  const container = document.getElementById('timesheet-stats');
+  if (!state.timesheets.length) { container.innerHTML = '<div class="text-muted">Aucune donnée importée.</div>'; return; }
+  const dates = new Set(state.timesheets.map(t => t.date));
+  const minD = Array.from(dates).sort()[0];
+  const maxD = Array.from(dates).sort().slice(-1)[0];
+  const d1 = state.timesheets.filter(t => t.projet === 1).length;
+  const d2 = state.timesheets.filter(t => t.projet === 2).length;
+  container.innerHTML = `
+    <div class="stat"><div class="lbl">Total entrées</div><div class="val">${state.timesheets.length}</div></div>
+    <div class="stat"><div class="lbl">Jours couverts</div><div class="val">${dates.size}</div></div>
+    <div class="stat"><div class="lbl">Période</div><div class="val">${minD} → ${maxD}</div></div>
+    <div class="stat"><div class="lbl">Départs / Arrivées</div><div class="val">${d1} / ${d2}</div></div>
+  `;
+}
+function renderTimesheetTable() {
+  const tbody = document.querySelector('#ts-table tbody');
+  const st = tableStates.ts;
+  let rows = state.timesheets.map(t => {
+    const sm = timeToMin(t.startTime), em = timeToMin(t.endTime);
+    let dur = null;
+    if (sm != null && em != null) dur = ((em - sm) % 1440 + 1440) % 1440;
+    return { ...t, duration: dur };
+  });
+  if (st.search) {
+    const q = st.search.toLowerCase();
+    rows = rows.filter(r => (r.employee||'').toLowerCase().includes(q) || (r.agentId||'').toLowerCase().includes(q));
+  }
+  if (st.projet !== 'all') rows = rows.filter(r => r.projet === parseInt(st.projet));
+  rows = sortRows(rows, st.sort, st.dir, (r,k) => r[k]);
+  applySortHeaders('#ts-table', st);
+  const pag = paginate(rows, st.page, st.pageSize); st.page = pag.page;
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Aucune feuille de temps.</td></tr>'; }
+  else tbody.innerHTML = pag.rows.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td><strong>${escapeHtml(r.employee||'')}</strong></td>
+      <td><code>${escapeHtml(r.agentId||'')}</code></td>
+      <td>${r.projet === 1 ? '<span class="badge badge-blue">Départs</span>' : '<span class="badge badge-acceptable">Arrivées</span>'}</td>
+      <td>${r.startTime}</td>
+      <td>${r.endTime}</td>
+      <td class="num">${r.duration != null ? minToHMS(r.duration) : '—'}</td>
+      <td class="num">${r.atemps != null ? fmtNum(r.atemps, 2) : '—'}</td>
+      <td><button class="btn btn-sm btn-danger" data-del-ts="${r.id}">Supprimer</button></td>
+    </tr>
+  `).join('');
+  renderPagination(document.getElementById('ts-pagination'), pag.page, pag.totalPages, p => { st.page = p; renderTimesheetTable(); });
+}
+
+/* ============================================================
+   SONDAGES
+============================================================ */
+function renderSurveysStats(type) {
+  const arr = type === 'D' ? state.surveysD : state.surveysA;
+  const validStatus = type === 'D' ? 'Completed' : 'On-target';
+  const container = document.getElementById('surveys-' + type.toLowerCase() + '-stats');
+  if (!arr.length) { container.innerHTML = '<div class="text-muted">Aucune donnée importée.</div>'; return; }
+  const valid = arr.filter(s => s.status === validStatus).length;
+  const dates = new Set(arr.map(s => s.date));
+  const minD = Array.from(dates).sort()[0];
+  const maxD = Array.from(dates).sort().slice(-1)[0];
+  const agents = new Set(arr.map(s => s.agentId));
+  container.innerHTML = `
+    <div class="stat"><div class="lbl">Total sondages</div><div class="val">${arr.length}</div></div>
+    <div class="stat"><div class="lbl">Validés (${validStatus})</div><div class="val">${valid}</div></div>
+    <div class="stat"><div class="lbl">Jours couverts</div><div class="val">${dates.size}</div></div>
+    <div class="stat"><div class="lbl">Période</div><div class="val">${minD} → ${maxD}</div></div>
+    <div class="stat"><div class="lbl">Agents distincts</div><div class="val">${agents.size}</div></div>
+  `;
+}
+function renderSurveysTable(type) {
+  const tableId = type === 'D' ? '#surv-d-table' : '#surv-a-table';
+  const stKey = type === 'D' ? 'survD' : 'survA';
+  const arr = type === 'D' ? state.surveysD : state.surveysA;
+  const tbody = document.querySelector(tableId + ' tbody');
+  const st = tableStates[stKey];
+  let rows = arr.slice();
+  if (st.search) {
+    const q = st.search.toLowerCase();
+    rows = rows.filter(r => (r.agentId||'').toLowerCase().includes(q) || (r.date||'').includes(q));
+  }
+  rows = sortRows(rows, st.sort, st.dir, (r,k) => r[k]);
+  applySortHeaders(tableId, st);
+  const pag = paginate(rows, st.page, st.pageSize); st.page = pag.page;
+  const delAttr = type === 'D' ? 'data-del-surv-d' : 'data-del-surv-a';
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Aucun sondage.</td></tr>'; }
+  else tbody.innerHTML = pag.rows.map(r => `
+    <tr>
+      <td>${r.date}</td>
+      <td>${r.time}</td>
+      <td><code>${escapeHtml(r.agentId||'')}</code></td>
+      <td>${r.status === 'Completed' || r.status === 'On-target' ? '<span class="badge badge-good">'+r.status+'</span>' : '<span class="badge badge-neutral">'+escapeHtml(r.status||'')+'</span>'}</td>
+      <td><code>${escapeHtml(r.referenceId||'')}</code></td>
+      <td><button class="btn btn-sm btn-danger" ${delAttr}="${r.id}">Supprimer</button></td>
+    </tr>
+  `).join('');
+  const pagId = type === 'D' ? 'surv-d-pagination' : 'surv-a-pagination';
+  renderPagination(document.getElementById(pagId), pag.page, pag.totalPages, p => { st.page = p; renderSurveysTable(type); });
+}
+
+/* ============================================================
+   SUIVI DÉPARTS / ARRIVÉES
+============================================================ */
+function renderSuivi(section) {
+  const stKey = section === 'D' ? 'sd' : 'sa';
+  const st = tableStates[stKey];
+  const tableId = section === 'D' ? '#sd-table' : '#sa-table';
+  const tbody = document.querySelector(tableId + ' tbody');
+  const seuils = state.config.thresholds[section];
+
+  // Lignes exclues sont déjà filtrées dans buildSuivi() — Dashboard + Évolution les voient aussi
+  let rows = buildSuivi(section);
+
+  // Filtres
+  const range = getDateRange(st.period, st.from, st.to);
+  rows = rows.filter(r => inRange(r.date, range));
+  if (st.agent !== 'all') rows = rows.filter(r => r.agentId === st.agent);
+
+  // Tri
+  rows = sortRows(rows, st.sort, st.dir, (r,k) => r[k]);
+  applySortHeaders(tableId, st);
+
+  // Stats summary
+  const totalSurveys = rows.reduce((s,r) => s + (r.surveys||0), 0);
+  const totalActualMin = rows.reduce((s,r) => s + (r.actualHours||0), 0);
+  const avgPerHour = totalActualMin > 0 ? (totalSurveys / (totalActualMin / 60)) : 0;
+  const absences = rows.filter(r => r.absence).length;
+  const incorrectStartCount = rows.filter(r => r.incorrectStart > 0).length;
+  const incorrectEndCount = rows.filter(r => r.incorrectEnd > 0).length;
+  const summaryEl = document.getElementById(section === 'D' ? 'sd-stats-summary' : 'sa-stats-summary');
+  summaryEl.innerHTML = `${rows.length} ligne${rows.length>1?'s':''} · ${totalSurveys} vols · ${minToHMS(totalActualMin)} h réelles · <strong>${fmtNum(avgPerHour, 2)}</strong> vols/h · <span class="status-incorrect">${absences} absence${absences>1?'s':''}</span>, ${incorrectStartCount} début incor., ${incorrectEndCount} fin incor.`;
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="20" class="empty-state">Aucune donnée pour cette période. Importez des horaires, feuilles de temps et sondages d\'abord.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const incStartCls = r.incorrectStart > 0 ? 'status-incorrect' : '';
+    const incEndCls = r.incorrectEnd > 0 ? 'status-incorrect' : '';
+    const absentCls = r.absence ? 'row-warning' : (r.incorrectStart > 0 || r.incorrectEnd > 0 ? 'row-attention' : '');
+    const delAttr = section === 'D' ? 'data-excl-d' : 'data-excl-a';
+    return `
+      <tr class="${absentCls}">
+        <td>${r.date}</td>
+        <td><code>${escapeHtml(r.agentId)}</code></td>
+        <td>${escapeHtml(r.employee)}</td>
+        <td class="num">${r.schedStart || '—'}</td>
+        <td class="num">${r.schedEnd || '—'}</td>
+        <td class="num">${r.tsStart || '—'}</td>
+        <td class="num">${r.tsEnd || '—'}</td>
+        <td class="num">${r.firstSurvey || (r.absence ? '<span class="status-absent">Absence</span>' : '—')}</td>
+        <td class="num">${r.lastSurvey || '—'}</td>
+        <td class="num">${r.schedHours != null ? minToHMS(r.schedHours) : '—'}</td>
+        <td class="num">${r.actualHours != null ? minToHMS(r.actualHours) : '—'}</td>
+        <td class="num">${r.diffHours != null ? minToHMS(r.diffHours) : '—'}</td>
+        <td class="num ${r.lateMin>0?'status-late':''}">${r.lateMin != null ? minToHMS(r.lateMin) : '—'}</td>
+        <td class="num ${r.earlyEndMin>0?'status-early':''}">${r.earlyEndMin != null ? minToHMS(r.earlyEndMin) : '—'}</td>
+        <td class="num ${incStartCls}">${r.incorrectStart != null ? minToHMS(r.incorrectStart) : '—'}</td>
+        <td class="num ${incEndCls}">${r.incorrectEnd != null ? minToHMS(r.incorrectEnd) : '—'}</td>
+        <td class="num"><strong>${r.surveys}</strong></td>
+        <td class="num">${r.surveysPerHour != null ? fmtNum(r.surveysPerHour, 2) : '—'}</td>
+        <td class="text-center">${r.absence ? '<span class="status-absent">OUI</span>' : '—'}</td>
+        <td>
+          <button class="btn btn-sm" data-edit-suivi="${section}|${r.date}|${r.agentId}" title="Modifier l'horaire de cette ligne">Modifier</button>
+          <button class="btn btn-sm btn-danger" ${delAttr}="${r.date}|${r.agentId}" title="Masquer cette ligne">Supprimer</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ============================================================
+   MODAL ÉDITION SUIVI — édite ou crée l'horaire de la ligne
+============================================================ */
+function openSuiviEditModal(section, date, agentId) {
+  const employee = state.employees.find(e => e.agentId === agentId);
+  const sched = state.schedules.find(s => s.date === date && s.agentId === agentId && s.projet === (section === 'D' ? 1 : 2));
+  // Peupler liste employés (filtrée par section)
+  const sel = document.getElementById('se-employee');
+  const empsOfSection = state.employees.filter(e => e.section === section).sort((a,b) => a.name.localeCompare(b.name));
+  sel.innerHTML = empsOfSection.map(e => `<option value="${e.id}" data-agentid="${e.agentId}">${escapeHtml(e.name)} (${e.agentId})</option>`).join('');
+  if (employee) sel.value = employee.id;
+  document.getElementById('se-date').value = date;
+  document.getElementById('se-agentid').value = agentId;
+  document.getElementById('se-start').value = sched ? sched.startTime : '';
+  document.getElementById('se-end').value = sched ? sched.endTime : '';
+  document.getElementById('se-section').value = section;
+  document.getElementById('se-orig-date').value = date;
+  document.getElementById('se-orig-agentid').value = agentId;
+  document.getElementById('suivi-edit-modal').classList.add('active');
+  // Update agentId display when employee changes
+  sel.onchange = () => {
+    const opt = sel.options[sel.selectedIndex];
+    if (opt) document.getElementById('se-agentid').value = opt.dataset.agentid || '';
+  };
+}
+document.getElementById('suivi-edit-close').addEventListener('click', () => document.getElementById('suivi-edit-modal').classList.remove('active'));
+document.getElementById('se-cancel').addEventListener('click', () => document.getElementById('suivi-edit-modal').classList.remove('active'));
+document.getElementById('form-suivi-edit').addEventListener('submit', e => {
+  e.preventDefault();
+  const section = document.getElementById('se-section').value;
+  const projet = section === 'D' ? 1 : 2;
+  const newDate = document.getElementById('se-date').value;
+  const empId = document.getElementById('se-employee').value;
+  const startTime = document.getElementById('se-start').value;
+  const endTime = document.getElementById('se-end').value;
+  const origDate = document.getElementById('se-orig-date').value;
+  const origAgentId = document.getElementById('se-orig-agentid').value;
+  const emp = state.employees.find(x => x.id === empId);
+  if (!emp || !newDate) { showFormFeedback('se-feedback', 'Données manquantes', 'error'); return; }
+
+  // Trouver l'horaire existant (même date + agentId originels)
+  const existing = state.schedules.find(s => s.date === origDate && s.agentId === origAgentId && s.projet === projet);
+  if (existing) {
+    existing.date = newDate;
+    existing.agentId = emp.agentId;
+    existing.employee = emp.name;
+    existing.startTime = startTime || existing.startTime;
+    existing.endTime = endTime || existing.endTime;
+  } else {
+    // Créer une nouvelle entrée d'horaire
+    state.schedules.push({
+      id: uid(), date: newDate, agentId: emp.agentId, employee: emp.name,
+      projet, startTime: startTime || '00:00', endTime: endTime || '00:00'
+    });
+  }
+  saveState();
+  document.getElementById('suivi-edit-modal').classList.remove('active');
+  toast('Horaire mis à jour. Suivi recalculé.', 'success');
+  refreshAll();
+});
+
+/* ============================================================
+   DASHBOARD — 3 sections : GLOBAL / DÉPARTS / ARRIVÉES
+============================================================ */
+function aggregateRows(rows) {
+  // Agrège un set de lignes Suivi en KPIs
+  const totalSurveys = rows.reduce((s,r) => s + (r.surveys||0), 0);
+  const totalActualMin = rows.reduce((s,r) => s + (r.actualHours||0), 0);
+  const totalSchedMin = rows.reduce((s,r) => s + (r.schedHours||0), 0);
+  const surveysPerHour = totalActualMin > 0 ? (totalSurveys / (totalActualMin / 60)) : null;
+  const absences = rows.filter(r => r.absence).length;
+  const incorrectStarts = rows.filter(r => r.incorrectStart > 0).length;
+  const incorrectEnds = rows.filter(r => r.incorrectEnd > 0).length;
+  return { totalSurveys, totalActualMin, totalSchedMin, surveysPerHour, absences, incorrectStarts, incorrectEnds, rowCount: rows.length };
+}
+
+function renderKpiCardsGlobal(agg) {
+  // PAS de Vols/heure dans GLOBAL (projets distincts)
+  return `
+    <div class="kpi-card kpi-violet"><div class="kpi-label">Total vols</div><div class="kpi-value">${agg.totalSurveys}</div><div class="kpi-detail">Sondages valides toutes sections</div></div>
+    <div class="kpi-card ${agg.incorrectStarts>0?'acceptable':'good'}"><div class="kpi-label">Quart début incorrect</div><div class="kpi-value">${agg.incorrectStarts}</div><div class="kpi-detail">Au-delà des seuils</div></div>
+    <div class="kpi-card ${agg.incorrectEnds>0?'acceptable':'good'}"><div class="kpi-label">Quart fin incorrect</div><div class="kpi-value">${agg.incorrectEnds}</div><div class="kpi-detail">Au-delà des seuils</div></div>
+    <div class="kpi-card ${agg.absences>0?'warning':'good'}"><div class="kpi-label">Absences</div><div class="kpi-value">${agg.absences}</div><div class="kpi-detail">No call no show</div></div>
+    <div class="kpi-card good"><div class="kpi-label">Heures travaillées</div><div class="kpi-value">${minToHMS(agg.totalActualMin)}</div><div class="kpi-detail">Cumul réel (dernier - 1er sondage)</div></div>
+    <div class="kpi-card"><div class="kpi-label">Heures prévues</div><div class="kpi-value">${minToHMS(agg.totalSchedMin)}</div><div class="kpi-detail">Cumul horaire planifié</div></div>
+  `;
+}
+function renderKpiCardsSection(agg, color) {
+  return `
+    <div class="kpi-card kpi-highlight"><div class="kpi-label">Vols / heure</div><div class="kpi-value">${agg.surveysPerHour != null ? fmtNum(agg.surveysPerHour, 2) : '—'}</div><div class="kpi-detail">${agg.totalSurveys} vols / ${minToHMS(agg.totalActualMin)}</div></div>
+    <div class="kpi-card good"><div class="kpi-label">Total vols</div><div class="kpi-value">${agg.totalSurveys}</div><div class="kpi-detail">Sondages valides</div></div>
+    <div class="kpi-card ${agg.incorrectStarts>0?'acceptable':'good'}"><div class="kpi-label">Quart début incorrect</div><div class="kpi-value">${agg.incorrectStarts}</div><div class="kpi-detail">Au-delà du seuil</div></div>
+    <div class="kpi-card ${agg.incorrectEnds>0?'acceptable':'good'}"><div class="kpi-label">Quart fin incorrect</div><div class="kpi-value">${agg.incorrectEnds}</div><div class="kpi-detail">Au-delà du seuil</div></div>
+    <div class="kpi-card ${agg.absences>0?'warning':'good'}"><div class="kpi-label">Absences</div><div class="kpi-value">${agg.absences}</div><div class="kpi-detail">No call no show</div></div>
+    <div class="kpi-card"><div class="kpi-label">H. travaillées / prévues</div><div class="kpi-value">${minToHMS(agg.totalActualMin)}</div><div class="kpi-detail">Prévu : ${minToHMS(agg.totalSchedMin)}</div></div>
+  `;
+}
+
+function buildAgentSummary(rows) {
+  const byAgent = {};
+  rows.forEach(r => {
+    if (!byAgent[r.agentId]) {
+      const e = state.employees.find(e => e.agentId === r.agentId);
+      byAgent[r.agentId] = {
+        agentId: r.agentId,
+        name: e ? e.name : r.employee,
+        totalSurveys: 0, hoursWorkedMin: 0, lateMinTotal: 0, lateCount: 0,
+        incorrectStart: 0, incorrectEnd: 0, absences: 0, days: 0
+      };
+    }
+    const a = byAgent[r.agentId];
+    a.totalSurveys += r.surveys || 0;
+    if (r.actualHours != null) a.hoursWorkedMin += r.actualHours;
+    if (r.lateMin != null) { a.lateMinTotal += r.lateMin; a.lateCount++; }
+    if (r.incorrectStart > 0) a.incorrectStart++;
+    if (r.incorrectEnd > 0) a.incorrectEnd++;
+    if (r.absence) a.absences++;
+    a.days++;
+  });
+  return Object.values(byAgent).map(a => ({
+    ...a,
+    hoursWorked: a.hoursWorkedMin,
+    surveysPerHour: a.hoursWorkedMin > 0 ? a.totalSurveys / (a.hoursWorkedMin / 60) : 0,
+    lateAvg: a.lateCount > 0 ? a.lateMinTotal / a.lateCount : 0
+  }));
+}
+
+function renderAgentTable(tableId, rows, st) {
+  const tbody = document.querySelector(tableId + ' tbody');
+  let agentRows = sortRows(rows, st.sort, st.dir, (r,k) => r[k]);
+  applySortHeaders(tableId, st);
+  if (!agentRows.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Aucune donnée pour cette période.</td></tr>'; return; }
+  tbody.innerHTML = agentRows.map(r => `
+    <tr>
+      <td><strong>${escapeHtml(r.name)}</strong></td>
+      <td><code>${escapeHtml(r.agentId)}</code></td>
+      <td class="num"><strong>${r.totalSurveys}</strong></td>
+      <td class="num">${minToHMS(r.hoursWorked)}</td>
+      <td class="num"><strong>${fmtNum(r.surveysPerHour, 2)}</strong></td>
+      <td class="num">${fmtNum(r.lateAvg, 1)}</td>
+      <td class="num ${r.incorrectStart>0?'status-incorrect':''}">${r.incorrectStart}</td>
+      <td class="num ${r.incorrectEnd>0?'status-incorrect':''}">${r.incorrectEnd}</td>
+      <td class="num ${r.absences>0?'status-absent':''}">${r.absences}</td>
+    </tr>
+  `).join('');
+}
+
+function renderDashboard() {
+  const st = tableStates.dash;
+  const range = getDateRange(st.period, st.from, st.to);
+  document.getElementById('dash-period-label').textContent = range.label;
+
+  ensureUiState();
+  const selected = state.ui.selectedAgents ? new Set(state.ui.selectedAgents) : null;
+
+  const dRowsAll = buildSuivi('D').filter(r => inRange(r.date, range));
+  const aRowsAll = buildSuivi('A').filter(r => inRange(r.date, range));
+  const dRows = selected ? dRowsAll.filter(r => selected.has(r.agentId)) : dRowsAll;
+  const aRows = selected ? aRowsAll.filter(r => selected.has(r.agentId)) : aRowsAll;
+  const allRows = [...dRows, ...aRows];
+
+  // KPI cards
+  document.getElementById('kpis-global').innerHTML = renderKpiCardsGlobal(aggregateRows(allRows));
+  document.getElementById('kpis-d').innerHTML = renderKpiCardsSection(aggregateRows(dRows), 'd');
+  document.getElementById('kpis-a').innerHTML = renderKpiCardsSection(aggregateRows(aRows), 'a');
+
+  // Targets affichés
+  const targets = state.config.productivityTargets || { D: 5.0, A: 2.0 };
+  if (document.getElementById('dash-d-target-lbl')) document.getElementById('dash-d-target-lbl').textContent = targets.D.toFixed(1);
+  if (document.getElementById('dash-a-target-lbl')) document.getElementById('dash-a-target-lbl').textContent = targets.A.toFixed(1);
+
+  // Agent summaries
+  const dSummary = buildAgentSummary(dRows);
+  const aSummary = buildAgentSummary(aRows);
+
+  // Charts seulement si la vue est visible (pour éviter canvas 0x0)
+  const activeView = (state.ui.dashView || 'global');
+  if (activeView === 'global') renderGlobalCharts(dSummary, aSummary);
+  if (activeView === 'd') renderSectionCharts('D', dSummary, dRows, targets.D);
+  if (activeView === 'a') renderSectionCharts('A', aSummary, aRows, targets.A);
+
+  // Heures payées en trop (3 sections)
+  renderOverpaidSection('global', dRows, aRows);
+  renderOverpaidSection('d', dRows, aRows);
+  renderOverpaidSection('a', dRows, aRows);
+
+  // Listes de mois pour le filtre Vols/h
+  populateVphMonthSelect('D', state.surveysD);
+  populateVphMonthSelect('A', state.surveysA);
+
+  // Tableau global combiné
+  const tbody = document.querySelector('#dash-global-table tbody');
+  if (tbody) {
+    const combined = [...dSummary.map(s => ({...s, section:'D'})), ...aSummary.map(s => ({...s, section:'A'}))];
+    if (!combined.length) tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Aucune donnée pour cette période.</td></tr>';
+    else tbody.innerHTML = combined.map(r => `
+      <tr>
+        <td><strong>${escapeHtml(r.name)}</strong></td>
+        <td><code>${escapeHtml(r.agentId)}</code></td>
+        <td>${r.section === 'D' ? '<span class="badge badge-blue">Départs</span>' : '<span class="badge badge-acceptable">Arrivées</span>'}</td>
+        <td class="num"><strong>${r.totalSurveys}</strong></td>
+        <td class="num">${minToHMS(r.hoursWorked)}</td>
+        <td class="num ${r.incorrectStart>0?'status-incorrect':''}">${r.incorrectStart}</td>
+        <td class="num ${r.incorrectEnd>0?'status-incorrect':''}">${r.incorrectEnd}</td>
+        <td class="num ${r.absences>0?'status-absent':''}">${r.absences}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Cartes par employé
+  renderEmployeeCards('dash-cards-d', dSummary, 'D', targets.D);
+  renderEmployeeCards('dash-cards-a', aSummary, 'A', targets.A);
+
+  refreshMultiSelectLabel();
+}
+
+function renderGlobalCharts(dSummary, aSummary) {
+  // Vols par agent (combiné D + A)
+  const all = [...dSummary, ...aSummary].sort((a,b) => b.totalSurveys - a.totalSurveys).slice(0, 12);
+  destroyChart('dash-bar-global-vols');
+  const cv = document.getElementById('dash-bar-global-vols');
+  if (cv) {
+    charts['dash-bar-global-vols'] = new Chart(cv, {
+      type: 'bar',
+      data: { labels: all.map(a => a.name.split(' ')[0]), datasets: [{ label: 'Vols', data: all.map(a => a.totalSurveys), backgroundColor: all.map(a => state.employees.find(e => e.agentId === a.agentId)?.section === 'D' ? '#1e40af' : '#ea580c') }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+    });
+  }
+  destroyChart('dash-bar-global-hours');
+  const ch = document.getElementById('dash-bar-global-hours');
+  if (ch) {
+    charts['dash-bar-global-hours'] = new Chart(ch, {
+      type: 'bar',
+      data: { labels: all.map(a => a.name.split(' ')[0]), datasets: [{ label: 'Heures (h)', data: all.map(a => +(a.hoursWorked / 60).toFixed(2)), backgroundColor: all.map(a => state.employees.find(e => e.agentId === a.agentId)?.section === 'D' ? '#1e40af' : '#ea580c') }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: v => v + 'h' } } } }
+    });
+  }
+}
+
+function renderSectionCharts(section, summary, rows, target) {
+  // Filtre mois pour Vols/heure (recalcule summary à partir des rows filtrées)
+  const monthKey = (state.ui && state.ui[section === 'D' ? 'vphMonthD' : 'vphMonthA']) || 'all';
+  const vphSummary = (monthKey === 'all') ? summary : buildAgentSummary(rows.filter(r => r.date.slice(0, 7) === monthKey));
+  const sortedVph = vphSummary.slice().sort((a,b) => b.totalSurveys - a.totalSurveys);
+  const sorted = summary.slice().sort((a,b) => b.totalSurveys - a.totalSurveys);
+  const labels = sorted.map(a => a.name.split(' ')[0]);
+  const colorMap = getAgentColorMap();
+  const colors = sorted.map(a => colorMap[a.agentId] || '#888');
+
+  // Vols/heure (filtrée par mois si applicable)
+  const vphLabels = sortedVph.map(a => a.name.split(' ')[0]);
+  const vphColors = sortedVph.map(a => colorMap[a.agentId] || '#888');
+  const vphLabelTxt = monthKey === 'all' ? 'Vols/h (tous mois)' : 'Vols/h (' + monthKey + ')';
+  const vphId = 'dash-bar-' + section.toLowerCase() + '-vph';
+  destroyChart(vphId);
+  const cv = document.getElementById(vphId);
+  if (cv) {
+    charts[vphId] = new Chart(cv, {
+      type: 'bar',
+      data: { labels: vphLabels, datasets: [
+        { label: vphLabelTxt, data: sortedVph.map(a => +(a.surveysPerHour || 0).toFixed(2)), backgroundColor: vphColors },
+        { label: 'Objectif ' + target.toFixed(1), data: vphLabels.map(() => target), type: 'line', borderColor: '#dc2626', borderDash: [5,5], pointRadius: 0, fill: false }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
+    });
+  }
+  // Quart début incorrect (par agent)
+  const lateId = 'dash-bar-' + section.toLowerCase() + '-late';
+  destroyChart(lateId);
+  const cl = document.getElementById(lateId);
+  if (cl) {
+    charts[lateId] = new Chart(cl, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Début incor.', data: sorted.map(a => a.incorrectStart), backgroundColor: '#d97706' }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+  }
+  // Quart fin incorrect
+  const earlyId = 'dash-bar-' + section.toLowerCase() + '-early';
+  destroyChart(earlyId);
+  const ce = document.getElementById(earlyId);
+  if (ce) {
+    charts[earlyId] = new Chart(ce, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Fin incor.', data: sorted.map(a => a.incorrectEnd), backgroundColor: '#dc2626' }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+  }
+}
+
+function renderEmployeeCards(containerId, summary, section, target) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!summary.length) { container.innerHTML = '<div class="empty-state">Aucun agent à afficher.</div>'; return; }
+  const sorted = summary.slice().sort((a,b) => (b.surveysPerHour||0) - (a.surveysPerHour||0));
+  container.innerHTML = '<div class="emp-card-grid">' + sorted.map(a => {
+    const vph = a.surveysPerHour || 0;
+    const vphCls = vph >= target ? 'positive' : (vph >= target * 0.8 ? 'warn' : 'bad');
+    const hasAlert = a.incorrectStart > 0 || a.incorrectEnd > 0 || a.absences > 0;
+    return `
+      <div class="emp-card ${hasAlert ? 'has-alert' : ''}">
+        <div>
+          <div class="ec-name">${escapeHtml(a.name)}</div>
+          <div class="ec-id">${escapeHtml(a.agentId)} · ${a.days} quart${a.days>1?'s':''}</div>
+        </div>
+        <div class="ec-metric"><div class="ec-label">Vols/h</div><div class="ec-value ${vphCls}">${vph.toFixed(2)}</div></div>
+        <div class="ec-metric"><div class="ec-label">Vols total</div><div class="ec-value">${a.totalSurveys}</div></div>
+        <div class="ec-metric"><div class="ec-label">H. travaillées</div><div class="ec-value" style="font-size:14px">${minToHMS(a.hoursWorked)}</div></div>
+        <div class="ec-metric"><div class="ec-label">Retard moy</div><div class="ec-value" style="font-size:14px">${a.lateAvg.toFixed(1)} min</div></div>
+        <div class="ec-metric"><div class="ec-label">Déb. inc.</div><div class="ec-value ${a.incorrectStart>0?'warn':''}">${a.incorrectStart}</div></div>
+        <div class="ec-metric"><div class="ec-label">Fin inc.</div><div class="ec-value ${a.incorrectEnd>0?'warn':''}">${a.incorrectEnd}</div></div>
+        <div class="ec-metric"><div class="ec-label">Absences</div><div class="ec-value ${a.absences>0?'bad':''}">${a.absences}</div></div>
+        <div class="ec-badges">
+          ${vph >= target ? '<div class="ec-badge bg-ok">✓ Objectif</div>' : '<div class="ec-badge bg-warn">Sous objectif</div>'}
+          ${a.incorrectStart > 0 ? `<div class="ec-badge bg-warn">${a.incorrectStart} déb. incor.</div>` : ''}
+          ${a.incorrectEnd > 0 ? `<div class="ec-badge bg-warn">${a.incorrectEnd} fin incor.</div>` : ''}
+          ${a.absences > 0 ? `<div class="ec-badge bg-alert">${a.absences} absence${a.absences>1?'s':''}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('') + '</div>';
+}
+
+/* ============================================================
+   HEURES PAYÉES EN TROP — multi-select + calcul + rendu
+============================================================ */
+function renderGenericMultiSelect(containerId, stateKey, agents, onChange) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  ensureUiState();
+  if (!Array.isArray(state.ui[stateKey])) state.ui[stateKey] = agents.map(e => e.agentId);
+  const validIds = new Set(agents.map(e => e.agentId));
+  state.ui[stateKey] = state.ui[stateKey].filter(id => validIds.has(id));
+  const sel = new Set(state.ui[stateKey]);
+  const total = agents.length;
+  const selCount = sel.size;
+  const labelTxt = selCount === total ? 'Tous (' + total + ')' : (selCount === 0 ? 'Aucun' : selCount + ' / ' + total);
+  const togId = containerId + '-toggle';
+  const ddId = containerId + '-dropdown';
+  container.innerHTML =
+    '<div class="multi-select-toggle" id="' + togId + '"><span>' + labelTxt + '</span><span style="opacity:0.6">▾</span></div>' +
+    '<div class="multi-select-dropdown" id="' + ddId + '">' +
+      '<div class="ms-actions">' +
+        '<button type="button" class="btn btn-sm" data-msg-all="' + stateKey + '">Tout cocher</button>' +
+        '<button type="button" class="btn btn-sm" data-msg-none="' + stateKey + '">Tout décocher</button>' +
+      '</div>' +
+      agents.map(e => '<label><input type="checkbox" data-msg-cb="' + stateKey + '" value="' + e.agentId + '" ' + (sel.has(e.agentId)?'checked':'') + '><span>' + escapeHtml(e.name) + ' <code style="color:var(--text-muted);font-size:11px">' + escapeHtml(e.agentId) + '</code></span></label>').join('') +
+    '</div>';
+  document.getElementById(togId).addEventListener('click', e => {
+    e.stopPropagation();
+    document.getElementById(ddId).classList.toggle('open');
+  });
+  container.querySelectorAll('[data-msg-cb="' + stateKey + '"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      state.ui[stateKey] = Array.from(container.querySelectorAll('[data-msg-cb="' + stateKey + '"]:checked')).map(c => c.value);
+      saveState();
+      if (onChange) onChange();
+    });
+  });
+  container.querySelector('[data-msg-all="' + stateKey + '"]').addEventListener('click', () => {
+    state.ui[stateKey] = agents.map(e => e.agentId);
+    saveState(); renderGenericMultiSelect(containerId, stateKey, agents, onChange); if (onChange) onChange();
+  });
+  container.querySelector('[data-msg-none="' + stateKey + '"]').addEventListener('click', () => {
+    state.ui[stateKey] = [];
+    saveState(); renderGenericMultiSelect(containerId, stateKey, agents, onChange); if (onChange) onChange();
+  });
+}
+
+function computeOverpaidMinutes(rows, selectedSet) {
+  return rows
+    .filter(r => !selectedSet || selectedSet.has(r.agentId))
+    .reduce((sum, r) => sum + (r.incorrectStart || 0) + (r.incorrectEnd || 0), 0);
+}
+function computeOverpaidByAgent(rows, selectedSet) {
+  const byAgent = {};
+  rows.filter(r => !selectedSet || selectedSet.has(r.agentId)).forEach(r => {
+    if (!byAgent[r.agentId]) {
+      const e = state.employees.find(e => e.agentId === r.agentId);
+      byAgent[r.agentId] = { agentId: r.agentId, name: e ? e.name : r.agentId, totalMin: 0 };
+    }
+    byAgent[r.agentId].totalMin += (r.incorrectStart || 0) + (r.incorrectEnd || 0);
+  });
+  return Object.values(byAgent).filter(a => a.totalMin > 0).sort((a,b) => b.totalMin - a.totalMin);
+}
+
+function renderOverpaidSection(scope, dRows, aRows) {
+  let rows, agents, stateKey, valId, breakdownId, containerId;
+  if (scope === 'global') {
+    rows = [...dRows, ...aRows];
+    agents = state.employees.slice().sort((a,b) => a.name.localeCompare(b.name));
+    stateKey = 'overpaidAgentsGlobal'; valId = 'overpaid-global-value'; breakdownId = 'overpaid-global-breakdown'; containerId = 'overpaid-global-multi';
+  } else if (scope === 'd') {
+    rows = dRows;
+    agents = state.employees.filter(e => e.section === 'D').sort((a,b) => a.name.localeCompare(b.name));
+    stateKey = 'overpaidAgentsD'; valId = 'overpaid-d-value'; breakdownId = 'overpaid-d-breakdown'; containerId = 'overpaid-d-multi';
+  } else {
+    rows = aRows;
+    agents = state.employees.filter(e => e.section === 'A').sort((a,b) => a.name.localeCompare(b.name));
+    stateKey = 'overpaidAgentsA'; valId = 'overpaid-a-value'; breakdownId = 'overpaid-a-breakdown'; containerId = 'overpaid-a-multi';
+  }
+  ensureUiState();
+  if (!Array.isArray(state.ui[stateKey])) state.ui[stateKey] = agents.map(e => e.agentId);
+  const selected = new Set(state.ui[stateKey]);
+  const totalMin = computeOverpaidMinutes(rows, selected);
+  const valEl = document.getElementById(valId);
+  if (valEl) valEl.textContent = minToHMS(totalMin);
+  const breakdown = computeOverpaidByAgent(rows, selected);
+  const brEl = document.getElementById(breakdownId);
+  if (brEl) {
+    if (!breakdown.length) brEl.innerHTML = '<div style="font-style:italic;color:rgba(0,0,0,0.5)">Aucune heure payée en trop pour la sélection.</div>';
+    else brEl.innerHTML = '<div style="font-size:10px;text-transform:uppercase;font-weight:600;margin-bottom:4px;opacity:0.7">Détail par agent</div>' +
+      breakdown.slice(0, 8).map(a => '<div class="ob-row"><span class="ob-name">' + escapeHtml(a.name) + '</span><span class="ob-time">' + minToHMS(a.totalMin) + '</span></div>').join('') +
+      (breakdown.length > 8 ? '<div style="font-size:10px;font-style:italic;margin-top:4px">… et ' + (breakdown.length - 8) + ' autres</div>' : '');
+  }
+  renderGenericMultiSelect(containerId, stateKey, agents, () => renderOverpaidSection(scope, dRows, aRows));
+}
+
+function populateVphMonthSelect(section, surveys) {
+  const id = section === 'D' ? 'vph-month-d' : 'vph-month-a';
+  const stateKey = section === 'D' ? 'vphMonthD' : 'vphMonthA';
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const months = Array.from(new Set(surveys.map(s => s.date.slice(0, 7)))).sort();
+  const cur = (state.ui && state.ui[stateKey]) || 'all';
+  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  sel.innerHTML = '<option value="all">Tous les mois</option>' + months.map(m => {
+    const [y, mo] = m.split('-');
+    return '<option value="' + m + '"' + (cur === m ? ' selected' : '') + '>' + monthNames[parseInt(mo)-1] + ' ' + y + '</option>';
+  }).join('');
+  sel.value = (cur === 'all' || months.includes(cur)) ? cur : 'all';
+}
+
+// Switch entre vues Global / Départs / Arrivées
+function setDashView(view) {
+  ensureUiState();
+  state.ui.dashView = view;
+  document.querySelectorAll('.ds-btn').forEach(b => b.classList.toggle('active', b.dataset.ds === view));
+  document.querySelectorAll('.dash-view').forEach(v => v.style.display = (v.id === 'dash-view-' + view) ? '' : 'none');
+  saveState();
+  renderDashboard();
+}
+
+/* ============================================================
+   COMPOSANT MULTI-SELECT AGENTS
+============================================================ */
+function ensureUiState() {
+  if (!state.ui) state.ui = { selectedAgents: null };
+}
+function getAllAgentIds() { return state.employees.map(e => e.agentId); }
+function initMultiSelectAgents() {
+  ensureUiState();
+  if (state.ui.selectedAgents == null) state.ui.selectedAgents = getAllAgentIds();
+  renderMultiSelectAgents();
+}
+function renderMultiSelectAgents() {
+  const container = document.getElementById('dash-agents-multi');
+  if (!container) return;
+  ensureUiState();
+  if (state.ui.selectedAgents == null) state.ui.selectedAgents = getAllAgentIds();
+  const empsD = state.employees.filter(e => e.section === 'D').sort((a,b) => a.name.localeCompare(b.name));
+  const empsA = state.employees.filter(e => e.section === 'A').sort((a,b) => a.name.localeCompare(b.name));
+  const sel = new Set(state.ui.selectedAgents || []);
+  const totalCount = state.employees.length;
+  const selCount = sel.size;
+  const labelTxt = selCount === totalCount ? 'Tous (' + totalCount + ')' : (selCount === 0 ? 'Aucun' : selCount + ' / ' + totalCount);
+  container.innerHTML = `
+    <div class="multi-select-toggle" id="ms-toggle"><span>${labelTxt}</span><span style="opacity:0.6">▾</span></div>
+    <div class="multi-select-dropdown" id="ms-dropdown">
+      <div class="ms-actions">
+        <button type="button" class="btn btn-sm" id="ms-all">Tout cocher</button>
+        <button type="button" class="btn btn-sm" id="ms-none">Tout décocher</button>
+      </div>
+      <div class="ms-section-label">Départs</div>
+      ${empsD.map(e => `<label><input type="checkbox" class="ms-cb" value="${e.agentId}" ${sel.has(e.agentId)?'checked':''}><span>${escapeHtml(e.name)} <code style="color:var(--text-muted);font-size:11px">${escapeHtml(e.agentId)}</code></span></label>`).join('')}
+      <div class="ms-section-label">Arrivées</div>
+      ${empsA.map(e => `<label><input type="checkbox" class="ms-cb" value="${e.agentId}" ${sel.has(e.agentId)?'checked':''}><span>${escapeHtml(e.name)} <code style="color:var(--text-muted);font-size:11px">${escapeHtml(e.agentId)}</code></span></label>`).join('')}
+    </div>
+  `;
+  document.getElementById('ms-toggle').addEventListener('click', e => {
+    e.stopPropagation();
+    document.getElementById('ms-dropdown').classList.toggle('open');
+  });
+  container.querySelectorAll('.ms-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = Array.from(container.querySelectorAll('.ms-cb:checked')).map(c => c.value);
+      state.ui.selectedAgents = checked;
+      saveState();
+      renderDashboard();
+      renderEvolution();
+    });
+  });
+  document.getElementById('ms-all').addEventListener('click', () => {
+    state.ui.selectedAgents = getAllAgentIds();
+    saveState(); renderMultiSelectAgents(); renderDashboard(); renderEvolution();
+  });
+  document.getElementById('ms-none').addEventListener('click', () => {
+    state.ui.selectedAgents = [];
+    saveState(); renderMultiSelectAgents(); renderDashboard(); renderEvolution();
+  });
+}
+function refreshMultiSelectLabel() {
+  const tog = document.getElementById('ms-toggle');
+  if (!tog) return;
+  const sel = new Set(state.ui && state.ui.selectedAgents || []);
+  const total = state.employees.length;
+  const labelTxt = sel.size === total ? 'Tous (' + total + ')' : (sel.size === 0 ? 'Aucun' : sel.size + ' / ' + total);
+  tog.querySelector('span').textContent = labelTxt;
+}
+// Click outside ferme le dropdown
+document.addEventListener('click', e => {
+  const dd = document.getElementById('ms-dropdown');
+  if (dd && dd.classList.contains('open') && !document.getElementById('dash-agents-multi').contains(e.target)) {
+    dd.classList.remove('open');
+  }
+});
+
+/* ============================================================
+   FICHIERS IMPORTÉS — affichage et retrait
+============================================================ */
+function renderImportsPanel(type, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const imports = (state.imports || []).filter(i => i.type === type).sort((a,b) => (b.importedAt||'').localeCompare(a.importedAt||''));
+  const labels = { schedule: 'Horaire', timesheet: 'Feuille de temps', surveysD: 'Sondages Départs', surveysA: 'Sondages Arrivées' };
+  if (!imports.length) {
+    container.innerHTML = `<h4 class="imports-panel-title">Fichiers importés (${labels[type]})</h4><div class="text-muted" style="font-size:12px">Aucun fichier importé pour le moment.</div>`;
+    return;
+  }
+  container.innerHTML = `
+    <h4 class="imports-panel-title">Fichiers importés (${labels[type]}) — ${imports.length} fichier${imports.length>1?'s':''}</h4>
+    ${imports.map(imp => {
+      const dt = imp.importedAt ? new Date(imp.importedAt) : null;
+      const dateImport = dt ? dt.toLocaleString('fr-CA', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      const dates = (imp.datesCovered || []);
+      const periodStr = dates.length ? (dates[0] + (dates.length > 1 ? ' → ' + dates[dates.length-1] : '') + ' (' + dates.length + ' jour' + (dates.length>1?'s':'') + ')') : '—';
+      return `
+        <div class="import-row">
+          <div class="file-icon">📄</div>
+          <div class="file-info">
+            <div class="file-name" title="${escapeHtml(imp.filename)}">${escapeHtml(imp.filename)}</div>
+            <div class="file-meta">Importé le ${dateImport} · ${imp.validRows||0} lignes · Période : ${periodStr}${imp.errorCount?` · <span style="color:var(--warning)">${imp.errorCount} erreur(s)</span>`:''}</div>
+          </div>
+          <div class="file-actions">
+            <button class="btn btn-sm btn-danger" data-remove-import="${imp.id}">Retirer</button>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+function renderAllImportsPanels() {
+  renderImportsPanel('schedule', 'schedule-imports-panel');
+  renderImportsPanel('timesheet', 'timesheet-imports-panel');
+  renderImportsPanel('surveysD', 'surveysD-imports-panel');
+  renderImportsPanel('surveysA', 'surveysA-imports-panel');
+}
+
+/* ============================================================
+   IMPORT HANDLERS
+============================================================ */
+function showImportModal(title, html) {
+  document.getElementById('import-modal-title').textContent = title;
+  document.getElementById('import-modal-body').innerHTML = html;
+  document.getElementById('import-modal').classList.add('active');
+}
+function hideImportModal() { document.getElementById('import-modal').classList.remove('active'); }
+document.getElementById('import-modal-close').addEventListener('click', hideImportModal);
+document.getElementById('import-modal').addEventListener('click', e => { if (e.target.id === 'import-modal') hideImportModal(); });
+
+function summarizeImport(parsed, errors) {
+  const dates = new Set(parsed.map(p => p.date));
+  const sortedDates = Array.from(dates).sort();
+  const min = sortedDates[0], max = sortedDates[sortedDates.length-1];
+  let html = `<p><strong>${parsed.length}</strong> ligne${parsed.length>1?'s':''} valide${parsed.length>1?'s':''} sur ${parsed.length + errors.length} traitée${(parsed.length + errors.length)>1?'s':''}.</p>`;
+  html += `<p><strong>${dates.size}</strong> jour${dates.size>1?'s':''} couvert${dates.size>1?'s':''}` + (min ? ` (du ${min} au ${max})` : '') + `.</p>`;
+  if (errors.length) {
+    html += `<details><summary style="cursor:pointer;color:var(--warning);font-weight:600">${errors.length} erreur${errors.length>1?'s':''} (cliquer pour détailler)</summary><ul style="font-size:11px;max-height:150px;overflow:auto;margin-top:6px">`;
+    html += errors.slice(0, 50).map(e => '<li>' + escapeHtml(e) + '</li>').join('');
+    if (errors.length > 50) html += '<li>… et ' + (errors.length - 50) + ' autres</li>';
+    html += '</ul></details>';
+  }
+  return html;
+}
+
+/* ============================================================
+   FORMULAIRE HORAIRE — ajout manuel + édition
+============================================================ */
+function populateScheduleEmployeeSelect() {
+  const sel = document.getElementById('sc-employee');
+  if (!sel) return;
+  const opts = state.employees.sort((a,b) => a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${escapeHtml(e.name)} (${e.agentId} · ${e.section === 'D' ? 'Départs' : 'Arrivées'})</option>`).join('');
+  sel.innerHTML = '<option value="">— Sélectionner —</option>' + opts;
+}
+document.getElementById('form-schedule').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('sc-edit-id').value;
+  const date = document.getElementById('sc-date').value;
+  const empId = document.getElementById('sc-employee').value;
+  const projet = parseInt(document.getElementById('sc-projet').value);
+  const startTime = document.getElementById('sc-start').value;
+  const endTime = document.getElementById('sc-end').value;
+  if (!date || !empId || !startTime || !endTime) { showFormFeedback('sc-feedback', 'Champs obligatoires manquants', 'error'); return; }
+  const emp = state.employees.find(x => x.id === empId);
+  if (!emp) { showFormFeedback('sc-feedback', 'Employé introuvable', 'error'); return; }
+  const obj = { id: id || uid(), date, employee: emp.name, agentId: emp.agentId, projet, startTime, endTime };
+  if (id) state.schedules = state.schedules.map(x => x.id === id ? obj : x);
+  else state.schedules.push(obj);
+  saveState();
+  resetScheduleForm();
+  showFormFeedback('sc-feedback', 'Horaire enregistré', 'success');
+  refreshAll();
+});
+function resetScheduleForm() {
+  document.getElementById('sc-edit-id').value = '';
+  document.getElementById('form-schedule').reset();
+  document.getElementById('sc-cancel').style.display = 'none';
+}
+document.getElementById('sc-cancel').addEventListener('click', resetScheduleForm);
+
+document.getElementById('btnImportSchedule').addEventListener('click', () => document.getElementById('fileSchedule').click());
+document.getElementById('fileSchedule').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const result = await importScheduleFile(f);
+    if (!result.parsed.length) { showImportModal('Erreur import horaire', summarizeImport(result.parsed, result.errors)); e.target.value = ''; return; }
+    const summary = summarizeImport(result.parsed, result.errors);
+    const datesPreview = Array.from(new Set(result.parsed.map(p => p.date))).sort().slice(0, 8).join(', ');
+    showImportModal('Aperçu — Horaire planifié',
+      summary +
+      `<p style="font-size:12px;color:var(--text-muted)">Dates : ${escapeHtml(datesPreview)}${result.parsed.length>8?'…':''}</p>` +
+      `<p style="font-size:12px;background:var(--warning-bg);padding:8px;border-radius:6px">⚠ Les horaires existants pour ces dates seront <strong>remplacés</strong>. Les autres dates ne seront pas affectées.</p>` +
+      `<div class="form-actions"><button class="btn btn-success" id="confirm-import-sc">Confirmer l'import</button> <button class="btn" id="cancel-import-sc">Annuler</button></div>`);
+    document.getElementById('confirm-import-sc').addEventListener('click', () => {
+      const r = applyImport('schedule', result.parsed, f.name, { totalRows: result.totalRows, errorCount: result.errors.length });
+      hideImportModal();
+      toast(`Horaire : ${r.added} ajoutés, ${r.removed} remplacés sur ${r.dates} jours`, 'success');
+      refreshAll();
+    });
+    document.getElementById('cancel-import-sc').addEventListener('click', hideImportModal);
+  } catch(err) {
+    toast('Erreur import : ' + err.message, 'error');
+  }
+  e.target.value = '';
+});
+document.getElementById('btnClearSchedule').addEventListener('click', () => {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer toutes les données d\'horaires ?')) return;
+  state.schedules = []; cleanupOrphanImports(); saveState(); refreshAll();
+  toast('Horaires effacés', 'info');
+});
+
+document.getElementById('btnImportTimesheet').addEventListener('click', () => document.getElementById('fileTimesheet').click());
+document.getElementById('fileTimesheet').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const result = await importTimesheetFile(f);
+    if (!result.parsed.length) { showImportModal('Erreur import feuille de temps', summarizeImport(result.parsed, result.errors)); e.target.value = ''; return; }
+    const summary = summarizeImport(result.parsed, result.errors);
+    showImportModal('Aperçu — Feuille de temps',
+      summary +
+      `<p style="font-size:12px;background:var(--warning-bg);padding:8px;border-radius:6px">⚠ Les feuilles de temps existantes pour ces dates seront <strong>remplacées</strong>.</p>` +
+      `<div class="form-actions"><button class="btn btn-success" id="confirm-import-ts">Confirmer l'import</button> <button class="btn" id="cancel-import-ts">Annuler</button></div>`);
+    document.getElementById('confirm-import-ts').addEventListener('click', () => {
+      const r = applyImport('timesheet', result.parsed, f.name, { totalRows: result.totalRows, errorCount: result.errors.length });
+      hideImportModal();
+      const breakdown = (result.projet1Count != null) ? ` (Départs : ${result.projet1Count}, Arrivées : ${result.projet2Count}, Autres : ${result.projetOtherCount})` : '';
+      toast(`Feuille de temps : ${r.added} entrées${breakdown}, ${r.removed} remplacés sur ${r.dates} jours`, 'success');
+      refreshAll();
+    });
+    document.getElementById('cancel-import-ts').addEventListener('click', hideImportModal);
+  } catch(err) {
+    toast('Erreur import : ' + err.message, 'error');
+  }
+  e.target.value = '';
+});
+document.getElementById('btnClearTimesheet').addEventListener('click', () => {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer toutes les données de feuille de temps ?')) return;
+  state.timesheets = []; cleanupOrphanImports(); saveState(); refreshAll();
+  toast('Feuilles de temps effacées', 'info');
+});
+
+document.getElementById('btnImportSurveysD').addEventListener('click', () => document.getElementById('fileSurveysD').click());
+document.getElementById('fileSurveysD').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const result = await importSurveysFile(f, 'D');
+    if (!result.parsed.length) { showImportModal('Erreur import sondages Départs', summarizeImport(result.parsed, result.errors)); e.target.value = ''; return; }
+    const summary = summarizeImport(result.parsed, result.errors);
+    showImportModal('Aperçu — Sondages Départs',
+      summary +
+      `<p style="font-size:12px">Statuts : <strong>${result.kept}</strong> "Completed" gardés pour comptage, ${result.filtered} autres conservés mais non comptés.</p>` +
+      `<p style="font-size:12px;background:var(--warning-bg);padding:8px;border-radius:6px">⚠ Les sondages Départs existants pour ces dates seront <strong>remplacés</strong>.</p>` +
+      `<div class="form-actions"><button class="btn btn-success" id="confirm-import-sd">Confirmer l'import</button> <button class="btn" id="cancel-import-sd">Annuler</button></div>`);
+    document.getElementById('confirm-import-sd').addEventListener('click', () => {
+      const r = applyImport('surveysD', result.parsed, f.name, { totalRows: result.totalRows, errorCount: result.errors.length });
+      hideImportModal();
+      toast(`Sondages Départs : ${r.added} ajoutés, ${r.removed} remplacés sur ${r.dates} jours`, 'success');
+      refreshAll();
+    });
+    document.getElementById('cancel-import-sd').addEventListener('click', hideImportModal);
+  } catch(err) {
+    toast('Erreur import : ' + err.message, 'error');
+  }
+  e.target.value = '';
+});
+document.getElementById('btnClearSurveysD').addEventListener('click', () => {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer tous les sondages Départs ?')) return;
+  state.surveysD = []; cleanupOrphanImports(); saveState(); refreshAll();
+  toast('Sondages Départs effacés', 'info');
+});
+
+document.getElementById('btnImportSurveysA').addEventListener('click', () => document.getElementById('fileSurveysA').click());
+document.getElementById('fileSurveysA').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const result = await importSurveysFile(f, 'A');
+    if (!result.parsed.length) { showImportModal('Erreur import sondages Arrivées', summarizeImport(result.parsed, result.errors)); e.target.value = ''; return; }
+    const summary = summarizeImport(result.parsed, result.errors);
+    showImportModal('Aperçu — Sondages Arrivées',
+      summary +
+      `<p style="font-size:12px">Statuts : <strong>${result.kept}</strong> "On-target" gardés pour comptage, ${result.filtered} autres conservés mais non comptés.</p>` +
+      `<p style="font-size:12px;background:var(--warning-bg);padding:8px;border-radius:6px">⚠ Les sondages Arrivées existants pour ces dates seront <strong>remplacés</strong>.</p>` +
+      `<div class="form-actions"><button class="btn btn-success" id="confirm-import-sa">Confirmer l'import</button> <button class="btn" id="cancel-import-sa">Annuler</button></div>`);
+    document.getElementById('confirm-import-sa').addEventListener('click', () => {
+      const r = applyImport('surveysA', result.parsed, f.name, { totalRows: result.totalRows, errorCount: result.errors.length });
+      hideImportModal();
+      toast(`Sondages Arrivées : ${r.added} ajoutés, ${r.removed} remplacés sur ${r.dates} jours`, 'success');
+      refreshAll();
+    });
+    document.getElementById('cancel-import-sa').addEventListener('click', hideImportModal);
+  } catch(err) {
+    toast('Erreur import : ' + err.message, 'error');
+  }
+  e.target.value = '';
+});
+document.getElementById('btnClearSurveysA').addEventListener('click', () => {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer tous les sondages Arrivées ?')) return;
+  state.surveysA = []; cleanupOrphanImports(); saveState(); refreshAll();
+  toast('Sondages Arrivées effacés', 'info');
+});
+
+/* ============================================================
+   EXPORTS CSV
+============================================================ */
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/[",\n;]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function downloadFile(name, content, type='text/plain') {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+function exportCsv(name, header, rows) {
+  const csv = '﻿' + [header, ...rows].map(r => r.map(csvEscape).join(';')).join('\n');
+  downloadFile(name, csv, 'text/csv;charset=utf-8');
+  toast('CSV exporté', 'success');
+}
+
+document.getElementById('btnExportSchedule').addEventListener('click', () => {
+  const header = ['Date','Employé','AGENTID','Projet','Heure_Début','Heure_Fin'];
+  const rows = state.schedules.map(s => [s.date, s.employee||'', s.agentId, s.projet, s.startTime, s.endTime]);
+  exportCsv('horaires.csv', header, rows);
+});
+document.getElementById('btnExportTimesheet').addEventListener('click', () => {
+  const header = ['Date','NOM','AGENTID','Projet','Heure_Début','Heure_Fin','ATEMPS','Notes'];
+  const rows = state.timesheets.map(t => [t.date, t.employee||'', t.agentId, t.projet, t.startTime, t.endTime, t.atemps??'', t.anote||'']);
+  exportCsv('feuille_de_temps.csv', header, rows);
+});
+document.getElementById('btnExportSurveysD').addEventListener('click', () => {
+  const header = ['Date','Heure','AGENTID','Statut','Reference_ID'];
+  const rows = state.surveysD.map(s => [s.date, s.time, s.agentId, s.status, s.referenceId||'']);
+  exportCsv('sondages_departs.csv', header, rows);
+});
+document.getElementById('btnExportSurveysA').addEventListener('click', () => {
+  const header = ['Date','Heure','AGENTID','Statut','Reference_ID'];
+  const rows = state.surveysA.map(s => [s.date, s.time, s.agentId, s.status, s.referenceId||'']);
+  exportCsv('sondages_arrivees.csv', header, rows);
+});
+function exportSuiviCsv(section) {
+  const rows = buildSuivi(section);
+  const range = getDateRange(tableStates[section==='D'?'sd':'sa'].period, tableStates[section==='D'?'sd':'sa'].from, tableStates[section==='D'?'sd':'sa'].to);
+  const filtered = rows.filter(r => inRange(r.date, range));
+  const header = ['Date','AGENTID','Employé','H. Début Horaire','H. Fin Horaire','Début F. de temps','Fin F. de temps','1er sondage','Dernier sondage','H. prévues','H. réelles','Diff prévues/réelles','Retard début','Fin hâtive','Heure début incorrecte','Heure fin incorrecte','Nombre de vols','Vols/heure','No call no show'];
+  const dataRows = filtered.map(r => [
+    r.date, r.agentId, r.employee,
+    r.schedStart||'', r.schedEnd||'', r.tsStart||'', r.tsEnd||'',
+    r.firstSurvey||'', r.lastSurvey||'',
+    r.schedHours!=null?minToHMS(r.schedHours):'', r.actualHours!=null?minToHMS(r.actualHours):'', r.diffHours!=null?minToHMS(r.diffHours):'',
+    r.lateMin!=null?minToHMS(r.lateMin):'', r.earlyEndMin!=null?minToHMS(r.earlyEndMin):'',
+    r.incorrectStart!=null?minToHMS(r.incorrectStart):'', r.incorrectEnd!=null?minToHMS(r.incorrectEnd):'',
+    r.surveys, r.surveysPerHour!=null?r.surveysPerHour.toFixed(2):'', r.absence
+  ]);
+  exportCsv('suivi_'+(section==='D'?'departs':'arrivees')+'.csv', header, dataRows);
+}
+document.getElementById('sd-export').addEventListener('click', () => exportSuiviCsv('D'));
+document.getElementById('sa-export').addEventListener('click', () => exportSuiviCsv('A'));
+
+/* ============================================================
+   IMPORT / EXPORT JSON GLOBAL
+============================================================ */
+document.getElementById('btnExportJson').addEventListener('click', () => {
+  downloadFile('suivi_aero_backup_' + fmtDate(new Date()) + '.json', JSON.stringify(state, null, 2), 'application/json');
+  toast('Sauvegarde JSON exportée', 'success');
+});
+document.getElementById('btnImportJson').addEventListener('click', () => document.getElementById('fileImportJson').click());
+document.getElementById('fileImportJson').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data.employees) throw new Error('JSON invalide');
+      if (!confirm('Remplacer toutes les données actuelles ?')) return;
+      state = Object.assign({}, state, data);
+      state.config = Object.assign({}, DEFAULT_CONFIG, state.config || {});
+      saveState();
+      loadSettingsForm();
+      refreshAll();
+      toast('Données importées', 'success');
+    } catch(err) { toast('Erreur import : ' + err.message, 'error'); }
+    e.target.value = '';
+  };
+  reader.readAsText(f);
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (!confirm('Effacer TOUTES les données ? Cette action est irréversible.')) return;
+  if (!confirm('Vraiment ?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = { employees: [], schedules: [], timesheets: [], surveysD: [], surveysA: [], imports: [], config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)) };
+  seedDefaultEmployees();
+  loadSettingsForm();
+  refreshAll();
+  toast('Données réinitialisées', 'info');
+});
+
+/* ============================================================
+   SETTINGS
+============================================================ */
+document.getElementById('form-settings').addEventListener('submit', e => {
+  e.preventDefault();
+  state.config.thresholds = {
+    D: {
+      lateMin: parseInt(document.getElementById('cfg-d-late').value) || 70,
+      earlyEndMin: parseInt(document.getElementById('cfg-d-early').value) || 45
+    },
+    A: {
+      lateMin: parseInt(document.getElementById('cfg-a-late').value) || 60,
+      earlyEndMin: parseInt(document.getElementById('cfg-a-early').value) || 20
+    }
+  };
+  state.config.productivityTargets = {
+    D: parseFloat(document.getElementById('cfg-d-target').value) || 5.0,
+    A: parseFloat(document.getElementById('cfg-a-target').value) || 2.0
+  };
+  saveState();
+  showFormFeedback('cfg-feedback', 'Paramètres enregistrés', 'success');
+  refreshAll();
+});
+function loadSettingsForm() {
+  document.getElementById('cfg-d-late').value = state.config.thresholds.D.lateMin;
+  document.getElementById('cfg-d-early').value = state.config.thresholds.D.earlyEndMin;
+  document.getElementById('cfg-a-late').value = state.config.thresholds.A.lateMin;
+  document.getElementById('cfg-a-early').value = state.config.thresholds.A.earlyEndMin;
+  if (!state.config.productivityTargets) state.config.productivityTargets = { D: 5.0, A: 2.0 };
+  document.getElementById('cfg-d-target').value = state.config.productivityTargets.D;
+  document.getElementById('cfg-a-target').value = state.config.productivityTargets.A;
+}
+
+/* ============================================================
+   TABS
+============================================================ */
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+}
+document.getElementById('tabs').addEventListener('click', e => {
+  if (e.target.matches('.tab')) {
+    showTab(e.target.dataset.panel);
+    // Re-render évolution si on y arrive (canvas a besoin d'être visible pour dimensionner)
+    if (e.target.dataset.panel === 'evolution') setTimeout(renderEvolution, 50);
+    if (e.target.dataset.panel === 'dashboard') setTimeout(renderDashboard, 50);
+  }
+});
+// Subtabs sondages
+document.querySelectorAll('.subtab').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.subtab').forEach(x => x.classList.toggle('active', x === b));
+    document.getElementById('subpanel-surv-d').style.display = b.dataset.subtab === 'surv-d' ? '' : 'none';
+    document.getElementById('subpanel-surv-a').style.display = b.dataset.subtab === 'surv-a' ? '' : 'none';
+  });
+});
+
+/* ============================================================
+   FILTRES SUIVI
+============================================================ */
+function attachSuiviFilters(prefix, stKey) {
+  const periodEl = document.getElementById(prefix+'-period');
+  const fromEl = document.getElementById(prefix+'-from');
+  const toEl = document.getElementById(prefix+'-to');
+  const fromWrap = document.getElementById(prefix+'-from-wrap');
+  const toWrap = document.getElementById(prefix+'-to-wrap');
+  const agentEl = document.getElementById(prefix+'-agent');
+  periodEl.addEventListener('change', e => {
+    tableStates[stKey].period = e.target.value;
+    fromWrap.style.display = e.target.value === 'custom' ? '' : 'none';
+    toWrap.style.display = e.target.value === 'custom' ? '' : 'none';
+    renderSuivi(stKey === 'sd' ? 'D' : 'A');
+  });
+  fromEl.addEventListener('change', e => { tableStates[stKey].from = e.target.value; renderSuivi(stKey === 'sd' ? 'D' : 'A'); });
+  toEl.addEventListener('change', e => { tableStates[stKey].to = e.target.value; renderSuivi(stKey === 'sd' ? 'D' : 'A'); });
+  agentEl.addEventListener('change', e => { tableStates[stKey].agent = e.target.value; renderSuivi(stKey === 'sd' ? 'D' : 'A'); });
+  // initial defaults
+  tableStates[stKey].period = periodEl.value;
+}
+attachSuiviFilters('sd', 'sd');
+attachSuiviFilters('sa', 'sa');
+
+// Filtres Évolution
+function ensureEvolState() { if (!tableStates.evol) tableStates.evol = { period: 'all', from: null, to: null }; }
+ensureEvolState();
+document.getElementById('evol-period').addEventListener('change', e => {
+  ensureEvolState();
+  tableStates.evol.period = e.target.value;
+  document.getElementById('evol-from-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
+  document.getElementById('evol-to-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
+  renderEvolution();
+});
+document.getElementById('evol-from').addEventListener('change', e => { ensureEvolState(); tableStates.evol.from = e.target.value; renderEvolution(); });
+document.getElementById('evol-to').addEventListener('change', e => { ensureEvolState(); tableStates.evol.to = e.target.value; renderEvolution(); });
+
+document.getElementById('dash-period').addEventListener('change', e => {
+  tableStates.dash.period = e.target.value;
+  document.getElementById('dash-from-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
+  document.getElementById('dash-to-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
+  renderDashboard();
+});
+document.getElementById('dash-from').addEventListener('change', e => { tableStates.dash.from = e.target.value; renderDashboard(); });
+document.getElementById('dash-to').addEventListener('change', e => { tableStates.dash.to = e.target.value; renderDashboard(); });
+
+// Sous-onglets dashboard (Global / Départs / Arrivées)
+document.querySelectorAll('.ds-btn').forEach(b => {
+  b.addEventListener('click', () => setDashView(b.dataset.ds));
+});
+
+// Filtres Mois pour Vols/heure (Départs / Arrivées)
+['D','A'].forEach(section => {
+  const id = section === 'D' ? 'vph-month-d' : 'vph-month-a';
+  const stateKey = section === 'D' ? 'vphMonthD' : 'vphMonthA';
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', e => {
+    ensureUiState();
+    state.ui[stateKey] = e.target.value;
+    saveState();
+    renderDashboard();
+  });
+});
+
+/* ============================================================
+   TRI ET RECHERCHE
+============================================================ */
+function attachTableUx(tableSel, stKey, renderFn) {
+  document.querySelectorAll(tableSel + ' thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const st = tableStates[stKey];
+      if (st.sort === th.dataset.sort) st.dir = st.dir === 'asc' ? 'desc' : 'asc';
+      else { st.sort = th.dataset.sort; st.dir = 'asc'; }
+      renderFn();
+    });
+  });
+}
+attachTableUx('#emp-table', 'emp', renderEmployeesTable);
+attachTableUx('#sc-table', 'sc', renderScheduleTable);
+attachTableUx('#ts-table', 'ts', renderTimesheetTable);
+attachTableUx('#surv-d-table', 'survD', () => renderSurveysTable('D'));
+attachTableUx('#surv-a-table', 'survA', () => renderSurveysTable('A'));
+attachTableUx('#sd-table', 'sd', () => renderSuivi('D'));
+attachTableUx('#sa-table', 'sa', () => renderSuivi('A'));
+attachTableUx('#dash-d-table', 'dash', renderDashboard);
+attachTableUx('#dash-a-table', 'dash', renderDashboard);
+
+document.getElementById('sc-search').addEventListener('input', e => { tableStates.sc.search = e.target.value; tableStates.sc.page = 1; renderScheduleTable(); });
+document.getElementById('sc-projet-filter').addEventListener('change', e => { tableStates.sc.projet = e.target.value; tableStates.sc.page = 1; renderScheduleTable(); });
+document.getElementById('ts-search').addEventListener('input', e => { tableStates.ts.search = e.target.value; tableStates.ts.page = 1; renderTimesheetTable(); });
+document.getElementById('ts-projet-filter').addEventListener('change', e => { tableStates.ts.projet = e.target.value; tableStates.ts.page = 1; renderTimesheetTable(); });
+document.getElementById('surv-d-search').addEventListener('input', e => { tableStates.survD.search = e.target.value; tableStates.survD.page = 1; renderSurveysTable('D'); });
+document.getElementById('surv-a-search').addEventListener('input', e => { tableStates.survA.search = e.target.value; tableStates.survA.page = 1; renderSurveysTable('A'); });
+
+/* ============================================================
+   DELETE / EDIT GLOBAL
+============================================================ */
+document.body.addEventListener('click', e => {
+  if (e.target.matches('[data-edit-emp]')) {
+    const x = state.employees.find(o => o.id === e.target.dataset.editEmp); if (!x) return;
+    document.getElementById('emp-edit-id').value = x.id;
+    document.getElementById('emp-name').value = x.name;
+    document.getElementById('emp-agentid').value = x.agentId;
+    document.getElementById('emp-section').value = x.section;
+    document.getElementById('emp-active').value = x.active ? 'true' : 'false';
+    document.getElementById('emp-cancel').style.display = '';
+    showTab('config');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  if (e.target.matches('[data-del-emp]')) {
+    if (!confirm('Supprimer cet agent ?')) return;
+    state.employees = state.employees.filter(o => o.id !== e.target.dataset.delEmp);
+    saveState(); refreshAll();
+  }
+  if (e.target.matches('[data-del-sc]')) {
+    if (!confirm('Supprimer cette ligne d\'horaire ?')) return;
+    state.schedules = state.schedules.filter(o => o.id !== e.target.dataset.delSc);
+    saveState(); refreshAll();
+  }
+  if (e.target.matches('[data-del-ts]')) {
+    if (!confirm('Supprimer cette feuille de temps ?')) return;
+    state.timesheets = state.timesheets.filter(o => o.id !== e.target.dataset.delTs);
+    saveState(); refreshAll();
+  }
+  if (e.target.matches('[data-del-surv-d]')) {
+    if (!confirm('Supprimer ce sondage Départs ?')) return;
+    state.surveysD = state.surveysD.filter(o => o.id !== e.target.dataset.delSurvD);
+    cleanupOrphanImports();
+    saveState(); refreshAll();
+  }
+  if (e.target.matches('[data-del-surv-a]')) {
+    if (!confirm('Supprimer ce sondage Arrivées ?')) return;
+    state.surveysA = state.surveysA.filter(o => o.id !== e.target.dataset.delSurvA);
+    cleanupOrphanImports();
+    saveState(); refreshAll();
+  }
+  if (e.target.matches('[data-remove-import]')) {
+    const id = e.target.dataset.removeImport;
+    const imp = (state.imports||[]).find(i => i.id === id);
+    if (!imp) return;
+    if (!confirm(`Retirer le fichier « ${imp.filename} » et toutes ses ${imp.validRows||0} lignes ? Cette action est irréversible.`)) return;
+    if (removeImport(id)) {
+      toast('Fichier retiré : ' + imp.filename, 'info');
+      refreshAll();
+    }
+  }
+  // Modifier une ligne Suivi (ouvre le modal d'édition d'horaire)
+  if (e.target.matches('[data-edit-suivi]')) {
+    const [section, date, agentId] = e.target.dataset.editSuivi.split('|');
+    openSuiviEditModal(section, date, agentId);
+    return;
+  }
+  // Supprimer (masquer) une ligne du Suivi Départs / Arrivées
+  if (e.target.matches('[data-excl-d]') || e.target.matches('[data-excl-a]')) {
+    const isD = e.target.matches('[data-excl-d]');
+    const section = isD ? 'D' : 'A';
+    const key = isD ? e.target.dataset.exclD : e.target.dataset.exclA;
+    const [date, agentId] = key.split('|');
+    if (!confirm(`Masquer la ligne ${date} · ${agentId} du Suivi ${section === 'D' ? 'Départs' : 'Arrivées'} ?\n\nCette ligne sera exclue des KPIs, du dashboard et de l'évolution. Restaurez-la depuis Configuration → Lignes masquées.`)) return;
+    if (!state.excludedSuivi) state.excludedSuivi = [];
+    state.excludedSuivi.push({ section, date, agentId });
+    saveState();
+    refreshAll();
+    toast('Ligne masquée. Voir Configuration → Lignes masquées pour restaurer.', 'info');
+    return;
+  }
+  // Restaurer une ligne masquée (depuis Configuration)
+  if (e.target.matches('[data-restore-excl]')) {
+    const idx = parseInt(e.target.dataset.restoreExcl);
+    if (state.excludedSuivi && state.excludedSuivi[idx]) {
+      state.excludedSuivi.splice(idx, 1);
+      saveState();
+      refreshAll();
+      toast('Ligne restaurée', 'success');
+    }
+    return;
+  }
+  // Modifier une ligne d'horaire dans la table Horaires
+  if (e.target.matches('[data-edit-sc]')) {
+    const sc = state.schedules.find(x => x.id === e.target.dataset.editSc);
+    if (!sc) return;
+    document.getElementById('sc-edit-id').value = sc.id;
+    document.getElementById('sc-date').value = sc.date;
+    const emp = state.employees.find(x => x.agentId === sc.agentId);
+    if (emp) document.getElementById('sc-employee').value = emp.id;
+    document.getElementById('sc-projet').value = sc.projet;
+    document.getElementById('sc-start').value = sc.startTime;
+    document.getElementById('sc-end').value = sc.endTime;
+    document.getElementById('sc-cancel').style.display = '';
+    showTab('schedule');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+});
+
+
+/* ============================================================
+   INIT — démarrage de l'application
+============================================================ */
+/* ============================================================
+   FORM FEEDBACK + TOAST
+============================================================ */
+function showFormFeedback(elId, msg, type) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = (type === 'success' ? '✓ ' : '⚠ ') + msg;
+  el.className = type === 'success' ? 'form-success' : 'form-error';
+  setTimeout(() => { if (el.textContent.endsWith(msg)) el.textContent = ''; }, 4000);
+}
+let toastTimer = null;
+function toast(msg, type) {
+  type = type || 'info';
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, 3500);
+}
+
+/* ============================================================
+   SEED PAR DÉFAUT
+============================================================ */
+function seedDefaultEmployees() {
+  if (state.employees.length) return;
+  state.employees = [
+    { id: uid(), name: 'Erik Tiré',                          agentId: 'etire1',       section: 'D', active: true },
+    { id: uid(), name: 'Bléon Brahimi',                      agentId: 'bbrahimi',     section: 'D', active: true },
+    { id: uid(), name: 'Karen Forbes',                       agentId: 'kforbes',      section: 'D', active: true },
+    { id: uid(), name: 'Amine Boukala',                      agentId: 'aboukala',     section: 'D', active: true },
+    { id: uid(), name: 'Marie-France Bérubé',                agentId: 'mfberube',     section: 'D', active: true },
+    { id: uid(), name: 'Sami Zerhouni',                      agentId: 'szerhouni',    section: 'A', active: true },
+    { id: uid(), name: 'Émilie Lombard',                     agentId: 'elombard',     section: 'A', active: true },
+    { id: uid(), name: 'Hagatiana Matthieu Rakotojaona',     agentId: 'mrakotojaona', section: 'A', active: true }
+  ];
+  saveState();
+}
+
+function init() {
+  loadState();
+  if (!state.employees.length) seedDefaultEmployees();
+  ensureUiState();
+  if (!state.ui.selectedAgents) state.ui.selectedAgents = getAllAgentIds();
+  if (!state.ui.dashView) state.ui.dashView = 'global';
+  document.querySelectorAll('.ds-btn').forEach(b => b.classList.toggle('active', b.dataset.ds === state.ui.dashView));
+  document.querySelectorAll('.dash-view').forEach(v => v.style.display = (v.id === 'dash-view-' + state.ui.dashView) ? '' : 'none');
+  loadSettingsForm();
+  refreshAll();
+}
+init();
+</script>
+</body>
+</html>
